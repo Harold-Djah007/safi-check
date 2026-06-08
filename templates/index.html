@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safi-Check • Daily Check-In</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+.particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 0;
+}
+.particle {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    animation: float 20s infinite;
+}
+@keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-100px) rotate(180deg); }
+}
+.container {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.checkin-card {
+    max-width: 700px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 32px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+.card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 32px;
+    text-align: center;
+    color: white;
+}
+.card-body { padding: 40px; }
+
+.logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.logo i { font-size: 32px; }
+.logo span { font-size: 24px; font-weight: 700; }
+
+.location-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 13px;
+    margin-top: 12px;
+}
+.badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 6px 14px;
+    border-radius: 50px;
+    font-size: 12px;
+    margin-top: 16px;
+}
+
+.mood-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 30px;
+    margin-bottom: 32px;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.mood-option {
+    text-align: center;
+    padding: 40px 20px;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: #f9fafb;
+    border: 3px solid transparent;
+    font-size: 60px;
+}
+.mood-option:hover { 
+    transform: translateY(-6px) scale(1.02); 
+    background: #f3f4f6;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+}
+.mood-option.selected {
+    border-color: #667eea;
+    background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%);
+    transform: scale(1.02);
+}
+
+.issues-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.issue-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f9fafb;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 1px solid #e5e7eb;
+}
+.issue-chip:hover { background: #f3f4f6; border-color: #667eea; }
+.issue-chip input { cursor: pointer; margin-right: 6px; }
+
+.conditional-section {
+    display: none;
+    animation: fadeIn 0.5s ease;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.form-group { margin-bottom: 24px; }
+label { display: block; font-weight: 600; color: #374151; margin-bottom: 8px; }
+textarea {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    transition: all 0.3s;
+    resize: vertical;
+}
+textarea:focus { outline: none; border-color: #667eea; }
+
+.btn-primary {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg,#667eea,#764ba2);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 20px;
+}
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(102,126,234,0.4);
+}
+
+.success-message { text-align: center; padding: 40px 0; }
+.success-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+}
+.success-icon i { font-size: 40px; color: white; }
+
+.card-footer {
+    padding: 20px 40px 32px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+}
+.footer-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.loading {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 0.6s linear infinite;
+    margin-left: 8px;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+    .card-body { padding: 24px; }
+    .mood-option { font-size: 40px; padding: 24px 16px; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="particles" id="particles"></div>
+
+<div class="container">
+<div class="checkin-card">
+
+<div class="card-header">
+    <div class="logo">
+        <i class="fas fa-chart-line"></i>
+        <span>Safi-Check</span>
+    </div>
+    <p>Your voice matters • Anonymous</p>
+    
+    <div class="location-badge" id="locationBadge">
+        <i class="fas fa-map-marker-alt"></i>
+        <span id="locationText">Detecting your location...</span>
+    </div>
+    
+    <div class="badge">
+        <i class="fas fa-lock"></i> 100% Anonymous & Secure
+    </div>
+</div>
+
+<div class="card-body">
+
+<form id="checkinForm">
+    <h1>How was your day?</h1>
+    <p class="subtitle" style="color: #6b7280; margin-bottom: 32px; text-align: center;">Select how you feel</p>
+    
+    <div class="mood-grid">
+        <div class="mood-option" data-mood="👍 Thumbs Up">👍</div>
+        <div class="mood-option" data-mood="👎 Thumbs Down">👎</div>
+    </div>
+    
+    <input type="hidden" name="mood" id="moodInput">
+    <input type="hidden" name="location" id="locationInput">
+
+    <div style="margin-top: 20px;">
+        <h3 style="margin-bottom: 16px; color: #374151;">What affected your day?</h3>
+        <p style="color: #6b7280; margin-bottom: 16px;">Select all that apply</p>
+        <div class="issues-grid">
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Workload"> <span>Workload</span></label>
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Equipment"> <span>Equipment</span></label>
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Management"> <span>Management</span></label>
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Team"> <span>Team/Colleagues</span></label>
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Safety"> <span>Safety Concerns</span></label>
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Communication"> <span>Communication</span></label>
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Training"> <span>Training</span></label>
+            <label class="issue-chip"><input type="checkbox" name="issues" value="Personal"> <span>Personal</span></label>
+        </div>
+    </div>
+
+    <div id="commentsSection" class="conditional-section">
+        <div class="form-group">
+            <label><i class="fas fa-comment"></i> What happened today? <span style="color: #dc2626;">*</span></label>
+            <textarea name="comments" rows="4" placeholder="Please tell us what went wrong so we can improve..."></textarea>
+        </div>
+    </div>
+
+    <button type="submit" class="btn-primary" id="submitBtn">
+        Submit Check-in <i class="fas fa-paper-plane"></i>
+    </button>
+</form>
+
+<div id="successMessage" style="display: none;">
+    <div class="success-message">
+        <div class="success-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <h3>Thank You!</h3>
+        <p>Your feedback has been recorded anonymously.</p>
+        <button id="doneBtn" class="btn-primary" style="margin-top: 24px;">Done</button>
+    </div>
+</div>
+
+</div>
+
+<div class="card-footer">
+    <div class="footer-stats">
+        <span><i class="fas fa-shield-alt"></i> Anonymous</span>
+        <span><i class="fas fa-clock"></i> Takes 30 sec</span>
+        <span><i class="fas fa-chart-line"></i> Helps improve workplace</span>
+    </div>
+</div>
+
+</div>
+</div>
+
+<script>
+// Particles animation
+const particlesContainer = document.getElementById("particles");
+if (particlesContainer) {
+    for (let i = 0; i < 50; i++) {
+        let p = document.createElement("div");
+        p.className = "particle";
+        p.style.width = Math.random() * 6 + 2 + "px";
+        p.style.height = p.style.width;
+        p.style.left = Math.random() * 100 + "%";
+        p.style.top = Math.random() * 100 + "%";
+        p.style.animationDelay = Math.random() * 20 + "s";
+        p.style.animationDuration = 15 + Math.random() * 20 + "s";
+        particlesContainer.appendChild(p);
+    }
+}
+
+let selectedMood = null;
+
+// ================= ENHANCED AUTO-DETECT LOCATION (NO MANUAL OPTIONS) =================
+async function detectLocation() {
+    const text = document.getElementById("locationText");
+    const input = document.getElementById("locationInput");
+
+    text.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting...';
+
+    let detectedLocation = "Ashaiman";
+    let country = "";
+    let city = "";
+    let region = "";
+    let isVPN = false;
+
+    try {
+        // Primary API
+        const res = await fetch("https://ipapi.co/json/");
+        const data = await res.json();
+        
+        console.log("Location API Response:", data);
+        
+        country = (data.country_name || "").toLowerCase();
+        city = (data.city || "").toLowerCase();
+        region = (data.region || "").toLowerCase();
+        isVPN = data.vpn === true || data.proxy === true || data.hosting === true;
+        
+        console.log("Detected - Country:", country, "City:", city, "VPN:", isVPN);
+        
+    } catch (error) {
+        console.error("Primary API failed:", error);
+        
+        // Fallback to ipinfo.io
+        try {
+            const fallbackRes = await fetch("https://ipinfo.io/json");
+            const fallbackData = await fallbackRes.json();
+            
+            country = (fallbackData.country || "").toLowerCase();
+            city = (fallbackData.city || "").toLowerCase();
+            region = (fallbackData.region || "").toLowerCase();
+            
+            console.log("Fallback - Country:", country, "City:", city);
+        } catch (fallbackError) {
+            console.error("Fallback failed:", fallbackError);
+            text.innerHTML = "📍 Ashaiman";
+            input.value = "Ashaiman";
+            return;
+        }
+    }
+    
+    // Determine location based on country (supports UK for VPN users)
+    if (country === "united kingdom" || country === "uk" || 
+        country === "great britain" || country === "england" ||
+        city.includes("london") || city.includes("manchester") ||
+        city.includes("birmingham") || city.includes("liverpool")) {
+        detectedLocation = "Netherlands";
+    }
+    else if (country === "netherlands" || country === "nl" ||
+             city.includes("amsterdam") || city.includes("rotterdam") ||
+             city.includes("the hague") || region.includes("north holland")) {
+        detectedLocation = "Netherlands";
+    }
+    else if (country === "germany" || country === "de" ||
+             city.includes("berlin") || city.includes("munich") ||
+             city.includes("frankfurt") || city.includes("hamburg")) {
+        detectedLocation = "Germany";
+    }
+    else if (country === "ghana" || country === "gh") {
+        if (city.includes("kumasi") || region.includes("ashanti")) {
+            detectedLocation = "Kumasi";
+        } else {
+            detectedLocation = "Ashaiman";
+        }
+    }
+    else if (country === "france" || country === "fr") {
+        detectedLocation = "France";
+    }
+    else if (country === "spain" || country === "es") {
+        detectedLocation = "Spain";
+    }
+    else if (country === "italy" || country === "it") {
+        detectedLocation = "Italy";
+    }
+    else if (country === "usa" || country === "united states" || country === "us") {
+        detectedLocation = "United States";
+    }
+    else if (country === "canada" || country === "ca") {
+        detectedLocation = "Canada";
+    }
+    else if (country === "australia" || country === "au") {
+        detectedLocation = "Australia";
+    }
+    else {
+        // Show the actual country name if available
+        if (country && country !== "") {
+            detectedLocation = country.charAt(0).toUpperCase() + country.slice(1);
+        } else {
+            detectedLocation = "Ashaiman";
+        }
+    }
+    
+    // Update the form
+    input.value = detectedLocation;
+    
+    // Display with VPN indicator if applicable
+    if (isVPN) {
+        text.innerHTML = `<i class="fas fa-shield-alt"></i> ${detectedLocation} <span style="font-size: 10px; background: rgba(255,193,7,0.3); padding: 2px 6px; border-radius: 20px;">VPN</span>`;
+    } else {
+        text.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${detectedLocation}`;
+    }
+    
+    console.log("Final location set to:", detectedLocation);
+}
+
+// Initial location detection
+detectLocation();
+
+// Refresh location every 30 seconds (in case IP changes)
+setInterval(() => {
+    detectLocation();
+}, 30000);
+
+// ================= MOOD SELECTION =================
+document.querySelectorAll(".mood-option").forEach(opt => {
+    opt.addEventListener("click", () => {
+        document.querySelectorAll(".mood-option").forEach(o => o.classList.remove("selected"));
+        opt.classList.add("selected");
+        selectedMood = opt.dataset.mood;
+        document.getElementById("moodInput").value = selectedMood;
+        
+        // Show/hide comments section
+        const commentsSection = document.getElementById("commentsSection");
+        if (selectedMood && selectedMood.includes("Thumbs Down")) {
+            commentsSection.style.display = "block";
+        } else {
+            commentsSection.style.display = "none";
+            document.querySelector('textarea[name="comments"]').value = "";
+        }
+    });
+});
+
+// ================= FORM SUBMISSION =================
+function resetForm() {
+    document.getElementById("checkinForm").reset();
+    document.querySelectorAll(".mood-option").forEach(o => o.classList.remove("selected"));
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+    document.querySelectorAll('textarea').forEach(ta => ta.value = "");
+    selectedMood = null;
+    document.getElementById("moodInput").value = "";
+    document.getElementById("commentsSection").style.display = "none";
+    document.getElementById("checkinForm").style.display = "block";
+    document.getElementById("successMessage").style.display = "none";
+    detectLocation();
+}
+
+document.getElementById("checkinForm").onsubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!selectedMood) {
+        alert("Please select how you feel");
+        return;
+    }
+    
+    if (selectedMood.includes("Thumbs Down")) {
+        const comment = document.querySelector('textarea[name="comments"]').value.trim();
+        if (!comment) {
+            alert("Please tell us what happened today. Your feedback helps us improve.");
+            document.querySelector('textarea[name="comments"]').focus();
+            return;
+        }
+    }
+    
+    const submitBtn = document.getElementById("submitBtn");
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = 'Submitting... <span class="loading"></span>';
+    submitBtn.disabled = true;
+    
+    const formData = new FormData(e.target);
+    
+    try {
+        const res = await fetch("/submit", { method: "POST", body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+            document.getElementById("checkinForm").style.display = "none";
+            document.getElementById("successMessage").style.display = "block";
+        } else {
+            alert(data.error || "Something went wrong");
+        }
+    } catch (error) {
+        alert("Network error. Please try again.");
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+};
+
+document.getElementById("doneBtn").onclick = () => {
+    resetForm();
+    document.getElementById("checkinForm").style.display = "block";
+    document.getElementById("successMessage").style.display = "none";
+};
+</script>
+
+</body>
+</html>

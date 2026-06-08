@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafiCheck | Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #f0f4f8; font-family: 'Inter', sans-serif; }
+        
+        /* Auth Overlay */
+        .auth-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a2e1f, #1b4d2e);
+            z-index: 2000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .auth-card {
+            background: white;
+            border-radius: 48px;
+            padding: 48px 40px;
+            width: 90%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+        }
+        .auth-card h2 { font-size: 2rem; background: linear-gradient(135deg, #0a2e1f, #1b4d2e); background-clip: text; -webkit-background-clip: text; color: transparent; margin-bottom: 8px; }
+        .auth-icon { font-size: 4rem; color: #2d6a4f; margin-bottom: 20px; }
+        
+        .password-container {
+            position: relative;
+            width: 100%;
+            margin: 12px 0;
+        }
+        .password-container input {
+            width: 100%;
+            padding: 14px 18px;
+            padding-right: 50px;
+            border: 2px solid #e2e8f0;
+            border-radius: 60px;
+            font-size: 1rem;
+            transition: 0.2s;
+        }
+        .password-container input:focus { border-color: #2d6a4f; outline: none; }
+        .toggle-password {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #6c86a3;
+            font-size: 1.1rem;
+        }
+        .toggle-password:hover { color: #2d6a4f; }
+        
+        .auth-card input[type="text"], .auth-card input[type="password"] {
+            width: 100%;
+            padding: 14px 18px;
+            margin: 12px 0;
+            border: 2px solid #e2e8f0;
+            border-radius: 60px;
+            font-size: 1rem;
+            transition: 0.2s;
+        }
+        .auth-card input:focus { border-color: #2d6a4f; outline: none; }
+        .auth-btn {
+            background: #1b4d2e;
+            color: white;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 60px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+        .auth-btn:hover { background: #0a2e1f; transform: translateY(-2px); }
+        .switch-auth { margin-top: 20px; font-size: 0.9rem; color: #6c86a3; }
+        .switch-auth a { color: #1b4d2e; text-decoration: none; font-weight: 600; cursor: pointer; }
+        .error-msg { color: #dc2626; font-size: 0.8rem; margin-top: 10px; display: none; background: #fee2e2; padding: 10px; border-radius: 30px; }
+        .success-msg { color: #2b7a4b; font-size: 0.8rem; margin-top: 10px; display: none; background: #e0f2e8; padding: 10px; border-radius: 30px; }
+        
+        .forgot-password { margin-top: 12px; font-size: 0.8rem; }
+        .forgot-password a { color: #6c86a3; text-decoration: none; cursor: pointer; }
+        .forgot-password a:hover { color: #1b4d2e; text-decoration: underline; }
+        
+        /* Admin Dashboard */
+        .admin-dashboard { display: none; padding: 2rem; }
+        .admin-container { max-width: 1400px; margin: 0 auto; }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .admin-header h1 {
+            font-size: 1.9rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #0a2e1f, #1b4d2e);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .session-user {
+            background: #e8f5e9;
+            padding: 6px 15px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #1b4d2e;
+        }
+        .logout-btn, .refresh-btn, .export-btn, .users-btn, .passwords-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .logout-btn { background: #ef4444; color: white; }
+        .refresh-btn { background: #f1f5f9; border: 1px solid #cbd5e1; }
+        .export-btn { background: #1b4d2e; color: white; }
+        .users-btn { background: #8b5cf6; color: white; }
+        .passwords-btn { background: #f59e0b; color: white; }
+        
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: white;
+            border-radius: 28px;
+            padding: 1.5rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+        .stat-card h3 { margin-bottom: 1.2rem; font-size: 1.1rem; color: #1f4d2e; display: flex; align-items: center; gap: 8px; }
+        .daily-mood-container { display: flex; flex-direction: column; gap: 12px; }
+        .mood-row { display: flex; flex-direction: column; gap: 4px; }
+        .mood-row .mood-label { display: flex; justify-content: space-between; font-size: 0.85rem; }
+        .mood-bar { background: #edf2f7; border-radius: 30px; height: 28px; overflow: hidden; }
+        .mood-fill { height: 100%; border-radius: 30px; transition: width 0.3s; }
+        
+        .location-filter { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .filter-chip {
+            background: #f1f5f9;
+            padding: 8px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: 0.2s;
+        }
+        .filter-chip.active { background: #2d6a4f; color: white; }
+        .filter-chip:hover { background: #cbd5e1; }
+        
+        .alert-banner {
+            background: #dc2626;
+            color: white;
+            padding: 14px 20px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        
+        .feedback-log {
+            background: white;
+            border-radius: 28px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        .feedback-item {
+            border-left: 4px solid #cbd5e1;
+            padding: 16px;
+            margin-bottom: 12px;
+            background: #f8fafc;
+            border-radius: 16px;
+        }
+        .feedback-item.red-flag { border-left-color: #dc2626; background: #fef2f2; }
+        .red-flag-tag {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #dc2626;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: 10px;
+        }
+        .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
+        canvas { max-height: 200px; }
+        .trend-stats { text-align: center; margin-top: 12px; font-size: 0.85rem; color: #4a627a; }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 32px;
+            padding: 30px;
+            max-width: 1000px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #6c86a3;
+        }
+        .user-table, .password-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .user-table th, .user-table td, .password-table th, .password-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .user-table th, .password-table th {
+            background: #f1f5f9;
+            font-weight: 600;
+        }
+        .reset-btn {
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        .reset-btn:hover { background: #d97706; }
+        .view-btn {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        .view-btn:hover { background: #7c3aed; }
+        .delete-user-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .delete-user-btn:hover { background: #b91c1c; }
+        .warning-text { color: #dc2626; font-size: 12px; margin-top: 10px; }
+        
+        @media (max-width: 768px) { 
+            .stats-grid { grid-template-columns: 1fr; }
+            .admin-dashboard { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- AUTHENTICATION OVERLAY -->
+<div id="authOverlay" class="auth-overlay" style="display: flex;">
+    <!-- Login View -->
+    <div id="loginView" class="auth-card" style="display: block;">
+        <div class="auth-icon"><i class="fas fa-shield-alt"></i></div>
+        <h2>Safi-Check</h2>
+        <p style="color: #6c86a3; margin-bottom: 20px;">Login to SafiCheck Dashboard</p>
+        <input type="text" id="loginUsername" placeholder="Username">
+        <div class="password-container">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('loginPassword', this)"></i>
+        </div>
+        <button class="auth-btn" onclick="attemptLogin()"><i class="fas fa-lock"></i> Login</button>
+        <div class="forgot-password">
+            <a onclick="showForgotPasswordView()">Forgot Password?</a>
+        </div>
+        <div class="switch-auth">
+            Don't have an account? <a onclick="showSignupView()">Sign up here</a>
+        </div>
+        <div id="loginError" class="error-msg"></div>
+    </div>
+
+    <!-- Sign Up View -->
+    <div id="signupView" class="auth-card" style="display: none;">
+        <div class="auth-icon"><i class="fas fa-user-plus"></i></div>
+        <h2>Create Account</h2>
+        <p style="color: #6c86a3; margin-bottom: 20px;">Sign up to access SafiCheck Admin</p>
+        <input type="text" id="signupUsername" placeholder="Username" autocomplete="off">
+        <div class="password-container">
+            <input type="password" id="signupPassword" placeholder="Password (min 6 characters)">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('signupPassword', this)"></i>
+        </div>
+        <button class="auth-btn" onclick="attemptSignup()"><i class="fas fa-check-circle"></i> Sign Up</button>
+        <div class="switch-auth">
+            Already have an account? <a onclick="showLoginView()">Login here</a>
+        </div>
+        <div id="signupError" class="error-msg"></div>
+        <div id="signupSuccess" class="success-msg"></div>
+    </div>
+
+    <!-- Forgot Password View -->
+    <div id="forgotPasswordView" class="auth-card" style="display: none;">
+        <div class="auth-icon"><i class="fas fa-key"></i></div>
+        <h2>Reset Password</h2>
+        <p style="color: #6c86a3; margin-bottom: 20px;">Enter your username to reset password</p>
+        <input type="text" id="resetUsername" placeholder="Username">
+        <div class="password-container">
+            <input type="password" id="newPassword" placeholder="New Password (min 6 characters)">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('newPassword', this)"></i>
+        </div>
+        <div class="password-container">
+            <input type="password" id="confirmPassword" placeholder="Confirm New Password">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('confirmPassword', this)"></i>
+        </div>
+        <button class="auth-btn" onclick="resetPassword()"><i class="fas fa-sync-alt"></i> Reset Password</button>
+        <div class="switch-auth">
+            <a onclick="showLoginView()">← Back to Login</a>
+        </div>
+        <div id="resetError" class="error-msg"></div>
+        <div id="resetSuccess" class="success-msg"></div>
+    </div>
+</div>
+
+<!-- User Login History Modal -->
+<div id="userLogModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-history"></i> User Login History</h2>
+            <button class="close-modal" onclick="closeUserLogModal()">&times;</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="user-table">
+                <thead><tr><th>User</th><th>Login Time</th><th>IP</th><th>Status</th></tr></thead>
+                <tbody id="userLogBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- User Management Modal - Admin can view, reset, and delete users -->
+<div id="userManagementModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-users-cog"></i> User Management</h2>
+            <button class="close-modal" onclick="closeUserManagementModal()">&times;</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="password-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Password (Visible to Admin)</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="userManagementBody"></tbody>
+            </table>
+        </div>
+        <div class="warning-text">
+            <i class="fas fa-exclamation-triangle"></i> Warning: Deleting a user is permanent and cannot be undone.
+        </div>
+    </div>
+</div>
+
+<!-- ADMIN DASHBOARD -->
+<div id="adminDashboard" class="admin-dashboard">
+    <div class="admin-container">
+        <div class="admin-header">
+            <div>
+                <h1><i class="fas fa-chart-line"></i> SafiCheck Dashboard</h1>
+                <p style="color: #4a627a; margin-top: 5px;">Real-time employee feedback with red flag alerts</p>
+            </div>
+            <div>
+                <span class="session-user" id="sessionUser"><i class="fas fa-user"></i> Loading...</span>
+                <button class="passwords-btn" onclick="showUserManagementModal()"><i class="fas fa-users-cog"></i> Manage Users</button>
+                <button class="users-btn" onclick="showUserLogModal()"><i class="fas fa-history"></i> Login Logs</button>
+                <button class="refresh-btn" onclick="loadData()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <button class="export-btn" onclick="exportToCSV()"><i class="fas fa-download"></i> Export CSV</button>
+                <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </div>
+
+        <div id="alertBanner" style="display: none;" class="alert-banner">
+            <i class="fas fa-exclamation-triangle" style="font-size: 24px;"></i>
+            <span><strong>🚨 RED FLAG ALERTS!</strong> Employee comments contain misconduct keywords that require immediate attention.</span>
+        </div>
+
+        <div id="locationFilter" class="location-filter"></div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3><i class="fas fa-chart-line"></i> Daily Mood Score (1-10)</h3>
+                <div id="dailyMoodContainer" class="daily-mood-container"><div class="empty-state">Loading...</div></div>
+            </div>
+            <div class="stat-card">
+                <h3><i class="fas fa-chart-pie"></i> Mood Distribution</h3>
+                <canvas id="moodChart"></canvas>
+                <div id="trendStats" class="trend-stats"></div>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3><i class="fas fa-exclamation-triangle"></i> Common Issues Reported</h3>
+                <div id="issuesList"></div>
+            </div>
+            <div class="stat-card">
+                <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+                <div id="recentList"></div>
+            </div>
+        </div>
+
+        <div class="feedback-log">
+            <h3><i class="fas fa-list"></i> All Feedback Entries (<span id="feedbackCount">0</span>)</h3>
+            <div id="feedbackLogs"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==================== HELPER FUNCTIONS ====================
+    function getCurrentTimestamp() {
+        const now = new Date();
+        return {
+            iso: now.toISOString(),
+            local: now.toLocaleString(),
+            date: now.toLocaleDateString(),
+            time: now.toLocaleTimeString(),
+            full: `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`
+        };
+    }
+    
+    // ==================== PASSWORD TOGGLE ====================
+    function togglePassword(fieldId, iconElement) {
+        const passwordField = document.getElementById(fieldId);
+        if (passwordField.type === 'password') {
+            passwordField.type = 'text';
+            iconElement.classList.remove('fa-eye');
+            iconElement.classList.add('fa-eye-slash');
+        } else {
+            passwordField.type = 'password';
+            iconElement.classList.remove('fa-eye-slash');
+            iconElement.classList.add('fa-eye');
+        }
+    }
+    
+    // ==================== USER MANAGEMENT ====================
+    const USERS_KEY = 'saficheck_users';
+    const SESSION_KEY = 'saficheck_session';
+    const LOGIN_LOGS_KEY = 'saficheck_login_logs';
+    
+    function logUserLogin(username, status, ip = 'local') {
+        const logs = getLoginLogs();
+        const timestamp = getCurrentTimestamp();
+        logs.unshift({ 
+            id: Date.now(), 
+            username, 
+            loginTime: timestamp.iso,
+            loginTimeDisplay: timestamp.full,
+            ipAddress: ip, 
+            status 
+        });
+        while (logs.length > 100) logs.pop();
+        localStorage.setItem(LOGIN_LOGS_KEY, JSON.stringify(logs));
+    }
+    
+    function getLoginLogs() {
+        const logs = localStorage.getItem(LOGIN_LOGS_KEY);
+        return logs ? JSON.parse(logs) : [];
+    }
+    
+    function getUsers() {
+        const users = localStorage.getItem(USERS_KEY);
+        if (!users) {
+            const defaultUsers = [{ id: 1, username: 'admin', password: 'admin123', createdAt: new Date().toISOString(), createdAtDisplay: getCurrentTimestamp().full }];
+            saveUsers(defaultUsers);
+            return defaultUsers;
+        }
+        return JSON.parse(users);
+    }
+    
+    function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+    
+    function findUserByUsername(username) { return getUsers().find(u => u.username === username); }
+    
+    function createUser(username, password) {
+        if (findUserByUsername(username)) return { success: false, error: "Username already taken" };
+        if (username.length < 3) return { success: false, error: "Username must be at least 3 characters" };
+        if (password.length < 6) return { success: false, error: "Password must be at least 6 characters" };
+        
+        const users = getUsers();
+        const timestamp = getCurrentTimestamp();
+        users.push({ 
+            id: Date.now(), 
+            username, 
+            password, 
+            createdAt: timestamp.iso,
+            createdAtDisplay: timestamp.full
+        });
+        saveUsers(users);
+        return { success: true };
+    }
+    
+    function resetUserPassword(username, newPassword) {
+        if (newPassword.length < 6) return { success: false, error: "Password must be at least 6 characters" };
+        
+        const users = getUsers();
+        const userIndex = users.findIndex(u => u.username === username);
+        if (userIndex === -1) return { success: false, error: "User not found" };
+        
+        users[userIndex].password = newPassword;
+        saveUsers(users);
+        return { success: true };
+    }
+    
+    function deleteUser(username) {
+        const users = getUsers();
+        const session = getSession();
+        
+        // Prevent deleting yourself
+        if (session && session.username === username) {
+            return { success: false, error: "You cannot delete your own account while logged in" };
+        }
+        
+        const userIndex = users.findIndex(u => u.username === username);
+        if (userIndex === -1) return { success: false, error: "User not found" };
+        
+        users.splice(userIndex, 1);
+        saveUsers(users);
+        return { success: true };
+    }
+    
+    function validateLogin(username, password) {
+        const user = findUserByUsername(username);
+        if (user && user.password === password) return { success: true, user };
+        return { success: false, error: "Invalid username or password" };
+    }
+    
+    function createSession(user) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id, username: user.username, expiresAt: Date.now() + (8 * 60 * 60 * 1000) }));
+        return getSession();
+    }
+    
+    function getSession() {
+        const session = localStorage.getItem(SESSION_KEY);
+        if (!session) return null;
+        const parsed = JSON.parse(session);
+        if (parsed.expiresAt < Date.now()) { localStorage.removeItem(SESSION_KEY); return null; }
+        return parsed;
+    }
+    
+    function destroySession() { localStorage.removeItem(SESSION_KEY); }
+    function isAuthenticated() { return getSession() !== null; }
+    
+    // ==================== UI VIEWS ====================
+    function showSignupView() {
+        document.getElementById('signupView').style.display = 'block';
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('forgotPasswordView').style.display = 'none';
+        document.getElementById('signupError').style.display = 'none';
+        document.getElementById('signupSuccess').style.display = 'none';
+    }
+    
+    function showLoginView() {
+        document.getElementById('signupView').style.display = 'none';
+        document.getElementById('loginView').style.display = 'block';
+        document.getElementById('forgotPasswordView').style.display = 'none';
+        document.getElementById('loginError').style.display = 'none';
+        document.getElementById('loginUsername').value = '';
+        document.getElementById('loginPassword').value = '';
+    }
+    
+    function showForgotPasswordView() {
+        document.getElementById('signupView').style.display = 'none';
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('forgotPasswordView').style.display = 'block';
+        document.getElementById('resetError').style.display = 'none';
+        document.getElementById('resetSuccess').style.display = 'none';
+        document.getElementById('resetUsername').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+    }
+    
+    function resetPassword() {
+        const username = document.getElementById('resetUsername').value.trim();
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        if (!username) { showResetError('Please enter your username'); return; }
+        if (!newPassword) { showResetError('Please enter a new password'); return; }
+        if (newPassword !== confirmPassword) { showResetError('Passwords do not match'); return; }
+        
+        const result = resetUserPassword(username, newPassword);
+        if (result.success) {
+            document.getElementById('resetSuccess').textContent = 'Password reset successfully! Please login.';
+            document.getElementById('resetSuccess').style.display = 'block';
+            setTimeout(() => showLoginView(), 2000);
+        } else {
+            showResetError(result.error);
+        }
+    }
+    
+    function showResetError(msg) {
+        document.getElementById('resetError').textContent = msg;
+        document.getElementById('resetError').style.display = 'block';
+    }
+    
+    function showDashboard() {
+        const session = getSession();
+        if (session) document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
+        document.getElementById('authOverlay').style.display = 'none';
+        document.getElementById('adminDashboard').style.display = 'block';
+        loadData();
+    }
+    
+    function showAuthScreen() {
+        document.getElementById('authOverlay').style.display = 'flex';
+        document.getElementById('adminDashboard').style.display = 'none';
+        showLoginView();
+    }
+    
+    // ==================== MODAL FUNCTIONS ====================
+    function showUserLogModal() {
+        document.getElementById('userLogModal').style.display = 'flex';
+        const logs = getLoginLogs();
+        const tbody = document.getElementById('userLogBody');
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No login records yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = logs.map(log => `
+            <tr>
+                <td><strong>${log.username}</strong></td>
+                <td>${log.loginTimeDisplay || new Date(log.loginTime).toLocaleString()}</td>
+                <td>${log.ipAddress}</td>
+                <td style="color: ${log.status === 'success' ? '#2b7a4b' : log.status === 'logout' ? '#6c86a3' : '#dc2626'}">${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}</td>
+            </tr>
+        `).join('');
+    }
+    
+    function closeUserLogModal() { document.getElementById('userLogModal').style.display = 'none'; }
+    
+    function showUserManagementModal() {
+        document.getElementById('userManagementModal').style.display = 'flex';
+        renderUserManagement();
+    }
+    
+    function closeUserManagementModal() { document.getElementById('userManagementModal').style.display = 'none'; }
+    
+    function renderUserManagement() {
+        const users = getUsers();
+        const tbody = document.getElementById('userManagementBody');
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No users found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = users.map(user => `
+            <tr>
+                <td><strong>${user.username}</strong></td>
+                <td class="password-cell">
+                    <span id="pwd-${user.id}">••••••</span>
+                    <button class="view-btn" onclick="togglePasswordVisibility(${user.id}, '${user.password.replace(/'/g, "\\'")}')">Show</button>
+                </td>
+                <td>${user.createdAtDisplay || new Date(user.createdAt).toLocaleString()}</td>
+                <td>
+                    <button class="reset-btn" onclick="showResetUserModal('${user.username}')">Reset</button>
+                    <button class="delete-user-btn" onclick="confirmDeleteUser('${user.username}')">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    function togglePasswordVisibility(userId, password) {
+        const span = document.getElementById(`pwd-${userId}`);
+        if (span.innerText === '••••••') {
+            span.innerText = password;
+        } else {
+            span.innerText = '••••••';
+        }
+    }
+    
+    function showResetUserModal(username) {
+        const newPassword = prompt(`Reset password for "${username}"\nEnter new password (min 6 characters):`);
+        if (newPassword && newPassword.length >= 6) {
+            const result = resetUserPassword(username, newPassword);
+            if (result.success) {
+                alert(`Password for "${username}" has been reset successfully!`);
+                renderUserManagement();
+            } else {
+                alert(result.error);
+            }
+        } else if (newPassword) {
+            alert('Password must be at least 6 characters');
+        }
+    }
+    
+    function confirmDeleteUser(username) {
+        if (confirm(`Are you sure you want to delete user "${username}"?\n\nThis action cannot be undone!`)) {
+            const result = deleteUser(username);
+            if (result.success) {
+                alert(`User "${username}" has been deleted.`);
+                renderUserManagement();
+                // If the deleted user was logged in elsewhere, they'll be logged out on next action
+            } else {
+                alert(result.error);
+            }
+        }
+    }
+    
+    // ==================== AUTH ACTIONS ====================
+    function attemptSignup() {
+        const username = document.getElementById('signupUsername').value.trim();
+        const password = document.getElementById('signupPassword').value;
+        if (!username || !password) {
+            document.getElementById('signupError').textContent = 'Please fill in all fields';
+            document.getElementById('signupError').style.display = 'block';
+            return;
+        }
+        const result = createUser(username, password);
+        if (result.success) {
+            document.getElementById('signupSuccess').textContent = 'Account created! Please login.';
+            document.getElementById('signupSuccess').style.display = 'block';
+            setTimeout(() => showLoginView(), 2000);
+        } else {
+            document.getElementById('signupError').textContent = result.error;
+            document.getElementById('signupError').style.display = 'block';
+        }
+    }
+    
+    function attemptLogin() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!username || !password) {
+            logUserLogin(username, 'failed');
+            document.getElementById('loginError').textContent = 'Please enter username and password';
+            document.getElementById('loginError').style.display = 'block';
+            return;
+        }
+        const result = validateLogin(username, password);
+        if (result.success) {
+            logUserLogin(username, 'success');
+            createSession(result.user);
+            showDashboard();
+        } else {
+            logUserLogin(username, 'failed');
+            document.getElementById('loginError').textContent = result.error;
+            document.getElementById('loginError').style.display = 'block';
+            document.getElementById('loginPassword').value = '';
+        }
+    }
+    
+    function logout() {
+        const session = getSession();
+        if (session) logUserLogin(session.username, 'logout');
+        destroySession();
+        showAuthScreen();
+        if (moodChart) { moodChart.destroy(); moodChart = null; }
+    }
+    
+    // ==================== DASHBOARD FUNCTIONS ====================
+    let feedbackData = [];
+    let currentFilter = 'all';
+    let moodChart = null;
+    
+    async function loadData() {
+        if (!isAuthenticated()) return;
+        try {
+            const response = await fetch('/api/feedback');
+            feedbackData = await response.json();
+            renderDashboard();
+        } catch (error) { console.error('Error loading data:', error); }
+    }
+    
+    function getFilteredData() { return currentFilter === 'all' ? feedbackData : feedbackData.filter(f => f.location === currentFilter); }
+    
+    function renderDashboard() {
+        const filtered = getFilteredData();
+        document.getElementById('alertBanner').style.display = filtered.filter(f => f.redFlags?.length > 0).length > 0 ? 'flex' : 'none';
+        renderLocationFilters();
+        renderDailyMood(filtered);
+        renderMoodChart(filtered);
+        renderIssuesList(filtered);
+        renderRecentList(filtered);
+        renderFeedbackLogs(filtered);
+    }
+    
+    function renderLocationFilters() {
+        const locations = [...new Set(feedbackData.map(f => f.location))];
+        let html = `<div class="filter-chip ${currentFilter === 'all' ? 'active' : ''}" onclick="setFilter('all')">📍 All (${feedbackData.length})</div>`;
+        locations.forEach(loc => {
+            const count = feedbackData.filter(f => f.location === loc).length;
+            html += `<div class="filter-chip ${currentFilter === loc ? 'active' : ''}" onclick="setFilter('${loc}')">📍 ${loc} (${count})</div>`;
+        });
+        document.getElementById('locationFilter').innerHTML = html;
+    }
+    
+    function renderDailyMood(data) {
+        const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const dayScores = {};
+        weekDays.forEach(day => dayScores[day] = { total: 0, count: 0 });
+        data.forEach(item => { if (item.day && dayScores[item.day]) { dayScores[item.day].total += item.moodScore || 0; dayScores[item.day].count++; } });
+        const container = document.getElementById('dailyMoodContainer');
+        if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback data yet</div>'; return; }
+        let html = '';
+        weekDays.forEach(day => {
+            const avg = dayScores[day].count > 0 ? Math.round(dayScores[day].total / dayScores[day].count) : 0;
+            const percent = (avg / 10) * 100;
+            const color = avg >= 7 ? '#2b7a4b' : (avg >= 5 ? '#e68a2e' : '#c23b22');
+            html += `<div class="mood-row"><div class="mood-label"><span>${day}</span><span><strong>${avg}</strong>/10</span></div><div class="mood-bar"><div class="mood-fill" style="width: ${percent}%; background: ${color};"></div></div></div>`;
+        });
+        container.innerHTML = html;
+    }
+    
+    function renderMoodChart(data) {
+        const good = data.filter(f => f.rating === 'good').length;
+        const bad = data.filter(f => f.rating === 'bad').length;
+        const ctx = document.getElementById('moodChart');
+        if (moodChart) moodChart.destroy();
+        if (data.length === 0) {
+            moodChart = new Chart(ctx, { type: 'doughnut', data: { labels: ['No Data'], datasets: [{ data: [1], backgroundColor: ['#e2e8f0'] }] } });
+            document.getElementById('trendStats').innerHTML = 'No data available';
+            return;
+        }
+        moodChart = new Chart(ctx, { type: 'doughnut', data: { labels: [`👍 Good (${good})`, `👎 Difficult (${bad})`], datasets: [{ data: [good, bad], backgroundColor: ['#2b7a4b', '#c23b22'], borderWidth: 0 }] }, options: { cutout: '55%', responsive: true, plugins: { legend: { position: 'bottom' } } } });
+        document.getElementById('trendStats').innerHTML = `${data.length} total entries | ${good} Good · ${bad} Difficult`;
+    }
+    
+    function renderIssuesList(data) {
+        const issueCount = {};
+        data.forEach(item => { if (item.issues) item.issues.forEach(issue => { issueCount[issue] = (issueCount[issue] || 0) + 1; }); });
+        const sorted = Object.entries(issueCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const container = document.getElementById('issuesList');
+        if (sorted.length === 0) { container.innerHTML = '<div class="empty-state">No issues reported yet</div>'; return; }
+        container.innerHTML = sorted.map(([issue, count]) => `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e2e8f0;"><span><i class="fas fa-flag" style="color:#e68a2e;"></i> ${issue}</span><span style="background: #e6f0fa; padding: 2px 12px; border-radius: 20px;">${count}</span></div>`).join('');
+    }
+    
+    function renderRecentList(data) {
+        const recent = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 5);
+        const container = document.getElementById('recentList');
+        if (recent.length === 0) { container.innerHTML = '<div class="empty-state">No recent feedback</div>'; return; }
+        container.innerHTML = recent.map(item => `<div style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;"><div style="display: flex; justify-content: space-between;"><span style="font-weight: 600;">${item.rating === 'good' ? '👍 Good' : '👎 Difficult'}</span><small>${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small></div><div style="font-size: 0.85rem; color: #4b5563; margin-top: 5px;">${item.comment?.substring(0, 80) || 'No comment'}</div></div>`).join('');
+    }
+    
+    function renderFeedbackLogs(data) {
+        const container = document.getElementById('feedbackLogs');
+        document.getElementById('feedbackCount').innerText = data.length;
+        if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback submissions yet</div>'; return; }
+        const sorted = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        container.innerHTML = sorted.map(item => `
+            <div class="feedback-item ${item.redFlags?.length > 0 ? 'red-flag' : ''}">
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                    <div><strong>📍 ${item.location}</strong> <span>${item.rating === 'good' ? '👍' : '👎'} ${item.rating === 'good' ? 'Good' : 'Difficult'}</span> <span>Mood: ${item.moodScore}/10</span></div>
+                    <div><small>${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small><button onclick="deleteFeedback(${item.id})" class="delete-btn"><i class="fas fa-trash-alt"></i></button></div>
+                </div>
+                <div style="margin-top: 8px;">"${item.comment || 'No comment'}"</div>
+                ${item.issues?.length ? `<div style="margin-top: 6px;"><small>Issues: ${item.issues.join(', ')}</small></div>` : ''}
+                ${item.redFlags?.length ? `<div style="margin-top: 6px;"><span class="red-flag-tag">🚨 RED FLAG: ${item.redFlags.join(', ')}</span></div>` : ''}
+            </div>
+        `).join('');
+    }
+    
+    async function deleteFeedback(id) {
+        if (!confirm('Delete this feedback?')) return;
+        try {
+            await fetch('/api/feedback', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+            loadData();
+        } catch (error) { alert('Failed to delete'); }
+    }
+    
+    function setFilter(location) { currentFilter = location; renderDashboard(); }
+    
+    function exportToCSV() {
+    const data = getFilteredData();
+    const timestamp = getCurrentTimestamp();
+    
+    // Only ONE timestamp column - Local only
+    const headers = ['ID', 'Location', 'Rating', 'Mood Score', 'Comment', 'Issues', 'Red Flags', 'Date & Time'];
+    
+    const rows = data.map(item => [
+        item.id, 
+        item.location, 
+        item.rating, 
+        item.moodScore, 
+        item.comment || '', 
+        (item.issues || []).join('; '),
+        (item.redFlags || []).join('; '),
+        item.timestampDisplay || new Date(item.timestamp).toLocaleString()
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => 
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `saficheck_data_${timestamp.date.replace(/\//g, '-')}_${timestamp.time.replace(/:/g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+    
+    // Make global
+    window.setFilter = setFilter; window.loadData = loadData; window.deleteFeedback = deleteFeedback; window.exportToCSV = exportToCSV;
+    window.logout = logout; window.attemptSignup = attemptSignup; window.attemptLogin = attemptLogin; window.resetPassword = resetPassword;
+    window.showSignupView = showSignupView; window.showLoginView = showLoginView; window.showForgotPasswordView = showForgotPasswordView;
+    window.togglePassword = togglePassword; window.showUserLogModal = showUserLogModal; window.closeUserLogModal = closeUserLogModal;
+    window.showUserManagementModal = showUserManagementModal; window.closeUserManagementModal = closeUserManagementModal;
+    window.togglePasswordVisibility = togglePasswordVisibility; window.showResetUserModal = showResetUserModal;
+    window.confirmDeleteUser = confirmDeleteUser;
+    
+    // Initialize
+    localStorage.removeItem(SESSION_KEY);
+    showAuthScreen();
+    setInterval(() => { if (isAuthenticated() && document.visibilityState === 'visible') loadData(); }, 15000);
+</script>
+</body>
+</html>
