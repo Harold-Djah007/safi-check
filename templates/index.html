@@ -136,15 +136,6 @@ body {
 .issue-chip:hover { background: #f3f4f6; border-color: #667eea; }
 .issue-chip input { cursor: pointer; margin-right: 6px; }
 
-.conditional-section {
-    display: none;
-    animation: fadeIn 0.5s ease;
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
 .form-group { margin-bottom: 24px; }
 label { display: block; font-weight: 600; color: #374151; margin-bottom: 8px; }
 textarea {
@@ -277,6 +268,11 @@ textarea:focus { outline: none; border-color: #667eea; }
         </div>
     </div>
 
+    <!-- Comments section - ALWAYS VISIBLE (removed conditional) -->
+    <div class="form-group">
+        <label><i class="fas fa-comment"></i> Tell us more <span style="color: #6b7280; font-weight: normal;">(Optional)</span></label>
+        <textarea name="comments" rows="4" placeholder="Share your thoughts, feedback, or suggestions..."></textarea>
+    </div>
 
     <button type="submit" class="btn-primary" id="submitBtn">
         Submit Check-in <i class="fas fa-paper-plane"></i>
@@ -326,7 +322,7 @@ if (particlesContainer) {
 
 let selectedMood = null;
 
-// ================= ENHANCED AUTO-DETECT LOCATION (NO MANUAL OPTIONS) =================
+// ================= AUTO-DETECT LOCATION =================
 async function detectLocation() {
     const text = document.getElementById("locationText");
     const input = document.getElementById("locationInput");
@@ -340,7 +336,6 @@ async function detectLocation() {
     let isVPN = false;
 
     try {
-        // Primary API
         const res = await fetch("https://ipapi.co/json/");
         const data = await res.json();
         
@@ -356,7 +351,6 @@ async function detectLocation() {
     } catch (error) {
         console.error("Primary API failed:", error);
         
-        // Fallback to ipinfo.io
         try {
             const fallbackRes = await fetch("https://ipinfo.io/json");
             const fallbackData = await fallbackRes.json();
@@ -374,7 +368,7 @@ async function detectLocation() {
         }
     }
     
-    // Determine location based on country (supports UK for VPN users)
+    // Determine location based on country
     if (country === "united kingdom" || country === "uk" || 
         country === "great britain" || country === "england" ||
         city.includes("london") || city.includes("manchester") ||
@@ -417,7 +411,6 @@ async function detectLocation() {
         detectedLocation = "Australia";
     }
     else {
-        // Show the actual country name if available
         if (country && country !== "") {
             detectedLocation = country.charAt(0).toUpperCase() + country.slice(1);
         } else {
@@ -425,10 +418,8 @@ async function detectLocation() {
         }
     }
     
-    // Update the form
     input.value = detectedLocation;
     
-    // Display with VPN indicator if applicable
     if (isVPN) {
         text.innerHTML = `<i class="fas fa-shield-alt"></i> ${detectedLocation} <span style="font-size: 10px; background: rgba(255,193,7,0.3); padding: 2px 6px; border-radius: 20px;">VPN</span>`;
     } else {
@@ -438,13 +429,8 @@ async function detectLocation() {
     console.log("Final location set to:", detectedLocation);
 }
 
-// Initial location detection
 detectLocation();
-
-// Refresh location every 30 seconds (in case IP changes)
-setInterval(() => {
-    detectLocation();
-}, 30000);
+setInterval(() => { detectLocation(); }, 30000);
 
 // ================= MOOD SELECTION =================
 document.querySelectorAll(".mood-option").forEach(opt => {
@@ -453,15 +439,6 @@ document.querySelectorAll(".mood-option").forEach(opt => {
         opt.classList.add("selected");
         selectedMood = opt.dataset.mood;
         document.getElementById("moodInput").value = selectedMood;
-        
-        // Show/hide comments section
-        const commentsSection = document.getElementById("commentsSection");
-        if (selectedMood && selectedMood.includes("Thumbs Down")) {
-            commentsSection.style.display = "block";
-        } else {
-            commentsSection.style.display = "none";
-            document.querySelector('textarea[name="comments"]').value = "";
-        }
     });
 });
 
@@ -473,7 +450,6 @@ function resetForm() {
     document.querySelectorAll('textarea').forEach(ta => ta.value = "");
     selectedMood = null;
     document.getElementById("moodInput").value = "";
-    document.getElementById("commentsSection").style.display = "none";
     document.getElementById("checkinForm").style.display = "block";
     document.getElementById("successMessage").style.display = "none";
     detectLocation();
@@ -485,15 +461,6 @@ document.getElementById("checkinForm").onsubmit = async (e) => {
     if (!selectedMood) {
         alert("Please select how you feel");
         return;
-    }
-    
-    if (selectedMood.includes("Thumbs Down")) {
-        const comment = document.querySelector('textarea[name="comments"]').value.trim();
-        if (!comment) {
-            alert("Please tell us what happened today. Your feedback helps us improve.");
-            document.querySelector('textarea[name="comments"]').focus();
-            return;
-        }
     }
     
     const submitBtn = document.getElementById("submitBtn");
