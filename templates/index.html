@@ -76,10 +76,6 @@ body {
     border-radius: 50px;
     font-size: 13px;
     margin-top: 12px;
-    cursor: pointer;
-}
-.location-badge:hover {
-    background: rgba(255, 255, 255, 0.25);
 }
 .badge {
     display: inline-block;
@@ -212,12 +208,6 @@ textarea:focus { outline: none; border-color: #667eea; }
     to { transform: rotate(360deg); }
 }
 
-.location-manual {
-    margin-top: 8px;
-    font-size: 11px;
-    opacity: 0.8;
-}
-
 @media (max-width: 640px) {
     .card-body { padding: 24px; }
     .mood-option { font-size: 40px; padding: 24px 16px; }
@@ -239,12 +229,9 @@ textarea:focus { outline: none; border-color: #667eea; }
     </div>
     <p>Your voice matters • Anonymous</p>
     
-    <div class="location-badge" id="locationBadge" onclick="openLocationSelector()">
+    <div class="location-badge" id="locationBadge">
         <i class="fas fa-map-marker-alt"></i>
         <span id="locationText">Detecting your location...</span>
-    </div>
-    <div class="location-manual">
-        <small>Tap to change if incorrect</small>
     </div>
     
     <div class="badge">
@@ -315,7 +302,6 @@ textarea:focus { outline: none; border-color: #667eea; }
 </div>
 </div>
 
-<!-- Location Selector Modal (Simple prompt-based for simplicity) -->
 <script>
 // Particles animation
 const particlesContainer = document.getElementById("particles");
@@ -408,7 +394,7 @@ async function detectLocation() {
     }
 
     // ================= ENHANCED GHANA LOCATION MAPPING =================
-    // Map regions to their major cities with better detection
+    // Map regions to their major cities
     const regionCityMapping = {
         "greater accra": "Accra",
         "ashanti": "Kumasi",
@@ -428,29 +414,45 @@ async function detectLocation() {
         "western north": "Sefwi Wiawso"
     };
 
-    // List of known Ghanaian cities for direct matching
-    const ghanaianCities = [
-        "kumasi", "accra", "takoradi", "tamale", "cape coast", "koforidua", "ho", "sunyani",
-        "bolgatanga", "wa", "tema", "ashaiman", "madina", "nima", "kaneshie", "dansoman",
-        "adenta", "haatso", "legon", "east legon", "west legon", "spintex", "asantem",
-        "bantama", "adum", "tafo", "santasi", "sekondi", "goaso", "damongo", "nalerigu",
-        "dambai", "sefwi wiawso", "obeasi", "konongo", "mampong", "nkwanta", "hohoe",
-        "keta", "winneba", "kasoa", "weija", "achimota", "dome", "kwabenya", "amasaman"
-    ];
+    // List of known Ghanaian cities with their regions for better matching
+    const ghanaCityMapping = {
+        "kumasi": "Kumasi",
+        "ashanti new town": "Kumasi",
+        "bantama": "Kumasi",
+        "adum": "Kumasi",
+        "tafo": "Kumasi",
+        "santasi": "Kumasi",
+        "asantem": "Kumasi",
+        "accra": "Accra",
+        "madina": "Madina",
+        "nima": "Nima",
+        "kaneshie": "Kaneshie",
+        "ashaiman": "Ashaiman",
+        "tema": "Tema",
+        "takoradi": "Takoradi",
+        "tamale": "Tamale",
+        "cape coast": "Cape Coast",
+        "koforidua": "Koforidua",
+        "ho": "Ho",
+        "sunyani": "Sunyani",
+        "bolgatanga": "Bolgatanga",
+        "wa": "Wa"
+    };
 
-    if (country === "ghana" || country === "gh" || regionCityMapping[region]) {
+    if (country === "ghana" || country === "gh") {
         
         // PRIORITY 1: Direct city match from API
-        if (city && city !== "") {
-            // Check if city is in our known cities list
-            const matchedCity = ghanaianCities.find(ghCity => 
-                city.includes(ghCity) || ghCity.includes(city)
-            );
-            if (matchedCity) {
-                detectedLocation = matchedCity.charAt(0).toUpperCase() + matchedCity.slice(1);
-                console.log(`Direct city match: ${detectedLocation}`);
-            } else {
-                // Use the city name from API
+        if (city && city !== "" && city !== "unknown" && city !== "ghana") {
+            // Check if city is in our mapping
+            for (const [key, value] of Object.entries(ghanaCityMapping)) {
+                if (city.includes(key) || key.includes(city)) {
+                    detectedLocation = value;
+                    console.log(`City match: ${detectedLocation} (from ${city})`);
+                    break;
+                }
+            }
+            // If no match found, use the city name from API
+            if (detectedLocation === "Ashaiman" && !city.includes("ashaiman")) {
                 detectedLocation = city.charAt(0).toUpperCase() + city.slice(1);
                 console.log(`Using API city: ${detectedLocation}`);
             }
@@ -460,7 +462,7 @@ async function detectLocation() {
             detectedLocation = regionCityMapping[region];
             console.log(`Region fallback: ${detectedLocation} (from ${region})`);
         }
-        // PRIORITY 3: Check ISP for location hints (mobile networks often reveal city)
+        // PRIORITY 3: Check ISP for location hints
         else if (isp) {
             if (isp.includes("kumasi") || isp.includes("ashanti")) {
                 detectedLocation = "Kumasi";
@@ -470,36 +472,39 @@ async function detectLocation() {
                 detectedLocation = "Tema";
             } else if (isp.includes("takoradi")) {
                 detectedLocation = "Takoradi";
+            } else if (isp.includes("tamale")) {
+                detectedLocation = "Tamale";
             }
             console.log(`ISP hint: ${detectedLocation}`);
         }
         // PRIORITY 4: Default based on region
-        else if (region) {
-            detectedLocation = regionCityMapping[region] || 
-                region.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        else if (region && regionCityMapping[region]) {
+            detectedLocation = regionCityMapping[region];
         }
     }
     // ================= OTHER COUNTRIES =================
-    else if (country === "united kingdom" || country === "uk" || country === "great britain") {
-        detectedLocation = "United Kingdom";
-    }
-    else if (country === "netherlands" || country === "nl") {
-        detectedLocation = "Netherlands";
-    }
-    else if (country === "germany" || country === "de") {
-        detectedLocation = "Germany";
-    }
-    else if (country === "france" || country === "fr") {
-        detectedLocation = "France";
-    }
-    else if (country === "spain" || country === "es") {
-        detectedLocation = "Spain";
-    }
-    else if (country === "usa" || country === "united states") {
-        detectedLocation = "United States";
-    }
-    else if (country && country !== "" && country !== "unknown") {
-        detectedLocation = country.charAt(0).toUpperCase() + country.slice(1);
+    else if (country) {
+        if (country === "united kingdom" || country === "uk" || country === "great britain") {
+            detectedLocation = "United Kingdom";
+        }
+        else if (country === "netherlands" || country === "nl") {
+            detectedLocation = "Netherlands";
+        }
+        else if (country === "germany" || country === "de") {
+            detectedLocation = "Germany";
+        }
+        else if (country === "france" || country === "fr") {
+            detectedLocation = "France";
+        }
+        else if (country === "spain" || country === "es") {
+            detectedLocation = "Spain";
+        }
+        else if (country === "usa" || country === "united states") {
+            detectedLocation = "United States";
+        }
+        else if (country !== "" && country !== "unknown") {
+            detectedLocation = country.charAt(0).toUpperCase() + country.slice(1);
+        }
     }
 
     // Store current location
@@ -515,45 +520,6 @@ async function detectLocation() {
     
     console.log("Final location set to:", detectedLocation);
     return detectedLocation;
-}
-
-// ================= MANUAL LOCATION SELECTOR =================
-function openLocationSelector() {
-    const locations = [
-        "Ashaiman", "Accra", "Kumasi", "Takoradi", "Tamale", "Cape Coast", 
-        "Koforidua", "Ho", "Sunyani", "Bolgatanga", "Wa", "Tema", 
-        "Madina", "Nima", "Kaneshie", "Dansoman", "Adenta", "Legon", 
-        "East Legon", "West Legon", "Spintex", "Kasoa", "Winneba", "Other"
-    ];
-    
-    let locationList = locations.join('\n• ');
-    let choice = prompt(
-        `📍 Current Location: ${currentDetectedLocation}\n\nIs this correct? If not, select your location:\n\n• ${locationList}\n\nType your location name and click OK.`
-    );
-    
-    if (choice && choice !== "Other" && choice.trim() !== "") {
-        let newLocation = choice.trim();
-        // Capitalize first letter of each word
-        newLocation = newLocation.split(' ').map(word => 
-            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-        ).join(' ');
-        
-        currentDetectedLocation = newLocation;
-        document.getElementById("locationInput").value = newLocation;
-        document.getElementById("locationText").innerHTML = `<i class="fas fa-map-marker-alt"></i> ${newLocation} <span style="font-size: 10px; background: rgba(59,130,246,0.3); padding: 2px 6px; border-radius: 20px;">manual</span>`;
-        console.log("Manual location set to:", newLocation);
-    } else if (choice === "Other") {
-        let otherLocation = prompt("Enter your location name:");
-        if (otherLocation && otherLocation.trim() !== "") {
-            let newLocation = otherLocation.trim();
-            newLocation = newLocation.split(' ').map(word => 
-                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-            ).join(' ');
-            currentDetectedLocation = newLocation;
-            document.getElementById("locationInput").value = newLocation;
-            document.getElementById("locationText").innerHTML = `<i class="fas fa-map-marker-alt"></i> ${newLocation} <span style="font-size: 10px; background: rgba(59,130,246,0.3); padding: 2px 6px; border-radius: 20px;">manual</span>`;
-        }
-    }
 }
 
 // ================= MOOD SELECTION =================
@@ -621,13 +587,9 @@ document.getElementById("doneBtn").onclick = () => {
 // Initialize location detection
 detectLocation();
 
-// Refresh location every 2 minutes (less frequent to avoid API spam)
+// Refresh location every 2 minutes
 setInterval(() => {
-    // Only refresh if user hasn't manually set location
-    const locationText = document.getElementById("locationText").innerHTML;
-    if (!locationText.includes("manual")) {
-        detectLocation();
-    }
+    detectLocation();
 }, 120000);
 </script>
 
