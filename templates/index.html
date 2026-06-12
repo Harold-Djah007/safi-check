@@ -263,13 +263,12 @@ textarea:focus { outline: none; border-color: #667eea; }
             <label class="issue-chip"><input type="checkbox" name="issues" value="Team"> <span>Team/Colleagues</span></label>
             <label class="issue-chip"><input type="checkbox" name="issues" value="Safety"> <span>Safety Concerns</span></label>
             <label class="issue-chip"><input type="checkbox" name="issues" value="Communication"> <span>Communication</span></label>
-            <label class="issue-chip"><input type="checkbox" name="issues" value="Training"> <span>Welfare</span></label>
             <label class="issue-chip"><input type="checkbox" name="issues" value="Training"> <span>Training</span></label>
             <label class="issue-chip"><input type="checkbox" name="issues" value="Personal"> <span>Personal</span></label>
         </div>
     </div>
 
-    <!-- Comments section - ALWAYS VISIBLE (removed conditional) -->
+    <!-- Comments section - Always visible, optional -->
     <div class="form-group">
         <label><i class="fas fa-comment"></i> Tell us more <span style="color: #6b7280; font-weight: normal;">(Optional)</span></label>
         <textarea name="comments" rows="4" placeholder="Share your thoughts, feedback, or suggestions..."></textarea>
@@ -323,7 +322,7 @@ if (particlesContainer) {
 
 let selectedMood = null;
 
-// ================= AUTO-DETECT LOCATION =================
+// ================= ENHANCED LOCATION DETECTION FOR GHANA =================
 async function detectLocation() {
     const text = document.getElementById("locationText");
     const input = document.getElementById("locationInput");
@@ -347,7 +346,7 @@ async function detectLocation() {
         region = (data.region || "").toLowerCase();
         isVPN = data.vpn === true || data.proxy === true || data.hosting === true;
         
-        console.log("Detected - Country:", country, "City:", city, "VPN:", isVPN);
+        console.log("Detected - Country:", country, "City:", city, "Region:", region);
         
     } catch (error) {
         console.error("Primary API failed:", error);
@@ -360,7 +359,7 @@ async function detectLocation() {
             city = (fallbackData.city || "").toLowerCase();
             region = (fallbackData.region || "").toLowerCase();
             
-            console.log("Fallback - Country:", country, "City:", city);
+            console.log("Fallback - Country:", country, "City:", city, "Region:", region);
         } catch (fallbackError) {
             console.error("Fallback failed:", fallbackError);
             text.innerHTML = "📍 Ashaiman";
@@ -369,29 +368,131 @@ async function detectLocation() {
         }
     }
     
-    // Determine location based on country
-    if (country === "united kingdom" || country === "uk" || 
-        country === "great britain" || country === "england" ||
-        city.includes("london") || city.includes("manchester") ||
-        city.includes("birmingham") || city.includes("liverpool")) {
-        detectedLocation = "Netherlands";
-    }
-    else if (country === "netherlands" || country === "nl" ||
-             city.includes("amsterdam") || city.includes("rotterdam") ||
-             city.includes("the hague") || region.includes("north holland")) {
-        detectedLocation = "Netherlands";
-    }
-    else if (country === "germany" || country === "de" ||
-             city.includes("berlin") || city.includes("munich") ||
-             city.includes("frankfurt") || city.includes("hamburg")) {
-        detectedLocation = "Germany";
-    }
-    else if (country === "ghana" || country === "gh") {
-        if (city.includes("kumasi") || region.includes("ashanti")) {
-            detectedLocation = "Kumasi";
-        } else {
+    // ================= GHANA LOCATION DETECTION =================
+    if (country === "ghana" || country === "gh") {
+        // Check for specific cities/towns in Ghana
+        const cityLower = city || "";
+        const regionLower = region || "";
+        
+        // Greater Accra Region locations
+        if (cityLower.includes("accra") || regionLower.includes("greater accra")) {
+            // Check for specific suburbs within Accra
+            if (cityLower.includes("madina") || cityLower.includes("madina estate")) {
+                detectedLocation = "Madina";
+            }
+            else if (cityLower.includes("nima") || cityLower.includes("nima 441")) {
+                detectedLocation = "Nima";
+            }
+            else if (cityLower.includes("kaneshie") || cityLower.includes("kaneshie first light")) {
+                detectedLocation = "Kaneshie";
+            }
+            else if (cityLower.includes("ashaiman") || cityLower.includes("ashaiman municipality")) {
+                detectedLocation = "Ashaiman";
+            }
+            else if (cityLower.includes("tema") || cityLower.includes("tema community")) {
+                detectedLocation = "Tema";
+            }
+            else if (cityLower.includes("spintex") || cityLower.includes("spintex road")) {
+                detectedLocation = "Spintex";
+            }
+            else if (cityLower.includes("dansoman") || cityLower.includes("dansoman estate")) {
+                detectedLocation = "Dansoman";
+            }
+            else if (cityLower.includes("adenta") || cityLower.includes("adenta municipal")) {
+                detectedLocation = "Adenta";
+            }
+            else if (cityLower.includes("haatso") || cityLower.includes("haatso atomic")) {
+                detectedLocation = "Haatso";
+            }
+            else if (cityLower.includes("legon") || cityLower.includes("university of ghana")) {
+                detectedLocation = "Legon";
+            }
+            else if (cityLower.includes("east legon") || cityLower.includes("east legon hills")) {
+                detectedLocation = "East Legon";
+            }
+            else if (cityLower.includes("west legon") || cityLower.includes("west legon residential")) {
+                detectedLocation = "West Legon";
+            }
+            else {
+                detectedLocation = "Accra";
+            }
+        }
+        // Ashanti Region locations
+        else if (cityLower.includes("kumasi") || regionLower.includes("ashanti") || cityLower.includes("kumasi metropolitan")) {
+            // Check for specific suburbs in Kumasi
+            if (cityLower.includes("asantem") || cityLower.includes("asantem kumasi")) {
+                detectedLocation = "Asantem";
+            }
+            else if (cityLower.includes("bantama") || cityLower.includes("bantama kumasi")) {
+                detectedLocation = "Bantama";
+            }
+            else if (cityLower.includes("adum") || cityLower.includes("adum kumasi")) {
+                detectedLocation = "Adum";
+            }
+            else if (cityLower.includes("tafo") || cityLower.includes("tafo kumasi")) {
+                detectedLocation = "Tafo";
+            }
+            else if (cityLower.includes("santasi") || cityLower.includes("santasi kumasi")) {
+                detectedLocation = "Santasi";
+            }
+            else {
+                detectedLocation = "Kumasi";
+            }
+        }
+        // Western Region
+        else if (cityLower.includes("takoradi") || regionLower.includes("western")) {
+            detectedLocation = "Takoradi";
+        }
+        else if (cityLower.includes("sekondi") || cityLower.includes("sekondi takoradi")) {
+            detectedLocation = "Sekondi";
+        }
+        // Central Region
+        else if (cityLower.includes("cape coast") || regionLower.includes("central")) {
+            detectedLocation = "Cape Coast";
+        }
+        // Eastern Region
+        else if (cityLower.includes("koforidua") || regionLower.includes("eastern")) {
+            detectedLocation = "Koforidua";
+        }
+        // Volta Region
+        else if (cityLower.includes("ho") || regionLower.includes("volta")) {
+            detectedLocation = "Ho";
+        }
+        // Northern Region
+        else if (cityLower.includes("tamale") || regionLower.includes("northern")) {
+            detectedLocation = "Tamale";
+        }
+        // Bono Region
+        else if (cityLower.includes("sunyani") || regionLower.includes("bono") || regionLower.includes("bono east")) {
+            detectedLocation = "Sunyani";
+        }
+        // Upper East Region
+        else if (cityLower.includes("bolgatanga") || regionLower.includes("upper east")) {
+            detectedLocation = "Bolgatanga";
+        }
+        // Upper West Region
+        else if (cityLower.includes("wa") || regionLower.includes("upper west")) {
+            detectedLocation = "Wa";
+        }
+        // If city is detected but not in our list, use the actual city name
+        else if (city && city !== "" && city !== "unknown" && city !== "ghana") {
+            detectedLocation = city.charAt(0).toUpperCase() + city.slice(1);
+        }
+        else {
             detectedLocation = "Ashaiman";
         }
+    }
+    // ================= OTHER COUNTRIES =================
+    else if (country === "united kingdom" || country === "uk" || 
+             country === "great britain" || country === "england" ||
+             city.includes("london") || city.includes("manchester")) {
+        detectedLocation = "United Kingdom";
+    }
+    else if (country === "netherlands" || country === "nl") {
+        detectedLocation = "Netherlands";
+    }
+    else if (country === "germany" || country === "de") {
+        detectedLocation = "Germany";
     }
     else if (country === "france" || country === "fr") {
         detectedLocation = "France";
@@ -419,8 +520,10 @@ async function detectLocation() {
         }
     }
     
+    // Update the form
     input.value = detectedLocation;
     
+    // Display with VPN indicator if applicable
     if (isVPN) {
         text.innerHTML = `<i class="fas fa-shield-alt"></i> ${detectedLocation} <span style="font-size: 10px; background: rgba(255,193,7,0.3); padding: 2px 6px; border-radius: 20px;">VPN</span>`;
     } else {
@@ -430,8 +533,13 @@ async function detectLocation() {
     console.log("Final location set to:", detectedLocation);
 }
 
+// Initial location detection
 detectLocation();
-setInterval(() => { detectLocation(); }, 30000);
+
+// Refresh location every 30 seconds (in case IP changes or user moves)
+setInterval(() => {
+    detectLocation();
+}, 30000);
 
 // ================= MOOD SELECTION =================
 document.querySelectorAll(".mood-option").forEach(opt => {
