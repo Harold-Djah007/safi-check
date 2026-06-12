@@ -77,6 +77,9 @@ body {
     font-size: 13px;
     margin-top: 12px;
 }
+.location-badge i {
+    margin-right: 6px;
+}
 .badge {
     display: inline-block;
     background: rgba(255, 255, 255, 0.2);
@@ -208,6 +211,15 @@ textarea:focus { outline: none; border-color: #667eea; }
     to { transform: rotate(360deg); }
 }
 
+.gps-badge {
+    display: inline-block;
+    background: rgba(16, 185, 129, 0.3);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    margin-left: 8px;
+}
+
 @media (max-width: 640px) {
     .card-body { padding: 24px; }
     .mood-option { font-size: 40px; padding: 24px 16px; }
@@ -322,204 +334,262 @@ if (particlesContainer) {
 let selectedMood = null;
 let currentDetectedLocation = "Ashaiman";
 
-// ================= ENHANCED LOCATION DETECTION WITH MULTIPLE APIs =================
-async function detectLocation() {
-    const text = document.getElementById("locationText");
-    const input = document.getElementById("locationInput");
-
-    text.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting...';
-
-    let detectedLocation = "Ashaiman";
-    let country = "";
-    let city = "";
-    let region = "";
-    let isp = "";
-    let isVPN = false;
-
-    // Try multiple APIs for better accuracy
-    const apis = [
-        {
-            url: "https://ipapi.co/json/",
-            parser: (data) => ({
-                country: data.country_name,
-                city: data.city,
-                region: data.region,
-                isp: data.org,
-                isVPN: data.vpn === true || data.proxy === true
-            })
-        },
-        {
-            url: "https://ipinfo.io/json",
-            parser: (data) => ({
-                country: data.country,
-                city: data.city,
-                region: data.region,
-                isp: data.org,
-                isVPN: false
-            })
-        },
-        {
-            url: "https://api.bigdatacloud.net/data/client-geolocation",
-            parser: (data) => ({
-                country: data.location?.country,
-                city: data.location?.city,
-                region: data.location?.principalSubdivision,
-                isp: data.network?.carrier,
-                isVPN: false
-            })
+// ================= GPS-BASED LOCATION DETECTION =================
+function getLocationFromGPS() {
+    return new Promise((resolve) => {
+        // Check if browser supports geolocation
+        if (!navigator.geolocation) {
+            console.log("Browser does not support geolocation");
+            resolve(null);
+            return;
         }
-    ];
 
-    for (const api of apis) {
-        try {
-            const res = await fetch(api.url);
-            const data = await res.json();
-            const parsed = api.parser(data);
-            
-            if (parsed.country) country = parsed.country.toLowerCase();
-            if (parsed.city) city = parsed.city.toLowerCase();
-            if (parsed.region) region = parsed.region.toLowerCase();
-            if (parsed.isp) isp = parsed.isp.toLowerCase();
-            if (parsed.isVPN) isVPN = true;
-            
-            console.log(`API ${api.url} - Country: ${country}, City: ${city}, Region: ${region}`);
-            
-            // If we got a valid city, break out
-            if (city && city !== "" && city !== "unknown") {
-                break;
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude, accuracy } = position.coords;
+                
+                console.log("📍 GPS Location detected:");
+                console.log("   Latitude:", latitude);
+                console.log("   Longitude:", longitude);
+                console.log("   Accuracy:", accuracy, "meters");
+                
+                // Only use if accuracy is reasonable (< 5000 meters = 5km)
+                if (accuracy > 5000) {
+                    console.log("⚠️ GPS accuracy too low, falling back to IP detection");
+                    resolve(null);
+                    return;
+                }
+                
+                try {
+                    // Use OpenStreetMap Nominatim API for reverse geocoding
+                    const res = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&zoom=10&format=json&accept-language=en`
+                    );
+                    
+                    const data = await res.json();
+                    console.log("📍 Reverse geocoding result:", data);
+                    
+                    // Extract city/town/village from address
+                    const city = data.address?.city ||
+                                data.address?.town ||
+                                data.address?.village ||
+                                data.address?.city_district ||
+                                data.address?.suburb ||
+                                data.address?.county ||
+                                null;
+                    
+                    if (city) {
+                        console.log("📍 City detected from GPS:", city);
+                        resolve(city);
+                    } else {
+                        console.log("⚠️ No city found in reverse geocoding");
+                        resolve(null);
+                    }
+                } catch (error) {
+                    console.error("❌ Reverse geocoding error:", error);
+                    resolve(null);
+                }
+            },
+            (error) => {
+                console.log("❌ GPS error:", error.message);
+                resolve(null);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
             }
-        } catch (error) {
-            console.error(`API ${api.url} failed:`, error);
+        );
+    });
+}
+
+// ================= IP-BASED FALLBACK LOCATION DETECTION =================
+async function getLocationFromIP() {
+    try {
+        const res = await fetch("https://ipapi.co/json/");
+        const data = await res.json();
+        
+        const city = data.city;
+        const country = data.country_name;
+        
+        console.log("📍 IP-based location:", city, country);
+        
+        if (city && city !== "" && city !== "unknown") {
+            return city;
         }
+        return null;
+    } catch (error) {
+        console.error("❌ IP location error:", error);
+        return null;
     }
+}
 
-    // ================= ENHANCED GHANA LOCATION MAPPING =================
-    // Map regions to their major cities
-    const regionCityMapping = {
-        "greater accra": "Accra",
-        "ashanti": "Kumasi",
-        "western": "Takoradi",
-        "central": "Cape Coast",
-        "eastern": "Koforidua",
-        "volta": "Ho",
-        "northern": "Tamale",
-        "upper east": "Bolgatanga",
-        "upper west": "Wa",
-        "bono": "Sunyani",
-        "bono east": "Sunyani",
-        "ahafo": "Goaso",
-        "savannah": "Damongo",
-        "north east": "Nalerigu",
-        "oti": "Dambai",
-        "western north": "Sefwi Wiawso"
-    };
-
-    // List of known Ghanaian cities with their regions for better matching
-    const ghanaCityMapping = {
-        "kumasi": "Kumasi",
-        "ashanti new town": "Kumasi",
-        "bantama": "Kumasi",
-        "adum": "Kumasi",
-        "tafo": "Kumasi",
-        "santasi": "Kumasi",
-        "asantem": "Kumasi",
-        "accra": "Accra",
+// ================= STANDARDIZE GHANA LOCATION NAMES =================
+function standardizeGhanaLocation(location) {
+    if (!location) return "Ashaiman";
+    
+    const lowerLoc = location.toLowerCase().trim();
+    
+    // Greater Accra Region locations
+    const accraLocations = {
         "madina": "Madina",
         "nima": "Nima",
         "kaneshie": "Kaneshie",
         "ashaiman": "Ashaiman",
         "tema": "Tema",
+        "spintex": "Spintex",
+        "dansoman": "Dansoman",
+        "adenta": "Adenta",
+        "haatso": "Haatso",
+        "legon": "Legon",
+        "east legon": "East Legon",
+        "west legon": "West Legon",
+        "accra": "Accra",
+        "dome": "Dome",
+        "kwabenya": "Kwabenya",
+        "amasaman": "Amasaman",
+        "weija": "Weija",
+        "kasoa": "Kasoa"
+    };
+    
+    // Ashanti Region locations
+    const ashantiLocations = {
+        "kumasi": "Kumasi",
+        "asantem": "Asantem",
+        "bantama": "Bantama",
+        "adum": "Adum",
+        "tafo": "Tafo",
+        "santasi": "Santasi",
+        "manhyia": "Manhyia",
+        "oforikrom": "Oforikrom",
+        "suame": "Suame"
+    };
+    
+    // Western Region
+    const westernLocations = {
         "takoradi": "Takoradi",
-        "tamale": "Tamale",
+        "sekondi": "Sekondi"
+    };
+    
+    // Northern Region
+    const northernLocations = {
+        "tamale": "Tamale"
+    };
+    
+    // Central Region
+    const centralLocations = {
         "cape coast": "Cape Coast",
-        "koforidua": "Koforidua",
-        "ho": "Ho",
-        "sunyani": "Sunyani",
-        "bolgatanga": "Bolgatanga",
+        "winneba": "Winneba"
+    };
+    
+    // Eastern Region
+    const easternLocations = {
+        "koforidua": "Koforidua"
+    };
+    
+    // Volta Region
+    const voltaLocations = {
+        "ho": "Ho"
+    };
+    
+    // Bono Region
+    const bonoLocations = {
+        "sunyani": "Sunyani"
+    };
+    
+    // Upper East Region
+    const upperEastLocations = {
+        "bolgatanga": "Bolgatanga"
+    };
+    
+    // Upper West Region
+    const upperWestLocations = {
         "wa": "Wa"
     };
-
-    if (country === "ghana" || country === "gh") {
-        
-        // PRIORITY 1: Direct city match from API
-        if (city && city !== "" && city !== "unknown" && city !== "ghana") {
-            // Check if city is in our mapping
-            for (const [key, value] of Object.entries(ghanaCityMapping)) {
-                if (city.includes(key) || key.includes(city)) {
-                    detectedLocation = value;
-                    console.log(`City match: ${detectedLocation} (from ${city})`);
-                    break;
-                }
-            }
-            // If no match found, use the city name from API
-            if (detectedLocation === "Ashaiman" && !city.includes("ashaiman")) {
-                detectedLocation = city.charAt(0).toUpperCase() + city.slice(1);
-                console.log(`Using API city: ${detectedLocation}`);
-            }
-        }
-        // PRIORITY 2: Match by region if city not found
-        else if (region && regionCityMapping[region]) {
-            detectedLocation = regionCityMapping[region];
-            console.log(`Region fallback: ${detectedLocation} (from ${region})`);
-        }
-        // PRIORITY 3: Check ISP for location hints
-        else if (isp) {
-            if (isp.includes("kumasi") || isp.includes("ashanti")) {
-                detectedLocation = "Kumasi";
-            } else if (isp.includes("accra") || isp.includes("greater accra")) {
-                detectedLocation = "Accra";
-            } else if (isp.includes("tema")) {
-                detectedLocation = "Tema";
-            } else if (isp.includes("takoradi")) {
-                detectedLocation = "Takoradi";
-            } else if (isp.includes("tamale")) {
-                detectedLocation = "Tamale";
-            }
-            console.log(`ISP hint: ${detectedLocation}`);
-        }
-        // PRIORITY 4: Default based on region
-        else if (region && regionCityMapping[region]) {
-            detectedLocation = regionCityMapping[region];
+    
+    // Check all location mappings
+    const allLocations = {
+        ...accraLocations,
+        ...ashantiLocations,
+        ...westernLocations,
+        ...northernLocations,
+        ...centralLocations,
+        ...easternLocations,
+        ...voltaLocations,
+        ...bonoLocations,
+        ...upperEastLocations,
+        ...upperWestLocations
+    };
+    
+    // Direct match
+    for (const [key, value] of Object.entries(allLocations)) {
+        if (lowerLoc.includes(key) || key.includes(lowerLoc)) {
+            return value;
         }
     }
-    // ================= OTHER COUNTRIES =================
-    else if (country) {
-        if (country === "united kingdom" || country === "uk" || country === "great britain") {
-            detectedLocation = "United Kingdom";
+    
+    // Check if it's a known Ghana city not in our mapping
+    if (lowerLoc.includes("kumasi")) return "Kumasi";
+    if (lowerLoc.includes("accra")) return "Accra";
+    if (lowerLoc.includes("ashaiman")) return "Ashaiman";
+    if (lowerLoc.includes("madina")) return "Madina";
+    if (lowerLoc.includes("nima")) return "Nima";
+    if (lowerLoc.includes("kaneshie")) return "Kaneshie";
+    
+    // Return capitalized version
+    return location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
+}
+
+// ================= MAIN LOCATION DETECTION FUNCTION =================
+async function detectLocation() {
+    const textElement = document.getElementById("locationText");
+    const inputElement = document.getElementById("locationInput");
+    
+    textElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting location...';
+    
+    let detectedCity = null;
+    let source = "unknown";
+    
+    // PRIORITY 1: Try GPS first (most accurate)
+    try {
+        textElement.innerHTML = '<i class="fas fa-satellite-dish fa-spin"></i> Getting GPS location...';
+        const gpsCity = await getLocationFromGPS();
+        if (gpsCity) {
+            detectedCity = gpsCity;
+            source = "GPS";
+            console.log("✅ Location detected via GPS:", detectedCity);
         }
-        else if (country === "netherlands" || country === "nl") {
-            detectedLocation = "Netherlands";
-        }
-        else if (country === "germany" || country === "de") {
-            detectedLocation = "Germany";
-        }
-        else if (country === "france" || country === "fr") {
-            detectedLocation = "France";
-        }
-        else if (country === "spain" || country === "es") {
-            detectedLocation = "Spain";
-        }
-        else if (country === "usa" || country === "united states") {
-            detectedLocation = "United States";
-        }
-        else if (country !== "" && country !== "unknown") {
-            detectedLocation = country.charAt(0).toUpperCase() + country.slice(1);
+    } catch (error) {
+        console.log("GPS detection failed:", error);
+    }
+    
+    // PRIORITY 2: Fallback to IP-based detection if GPS fails
+    if (!detectedCity) {
+        textElement.innerHTML = '<i class="fas fa-globe fa-spin"></i> Detecting via network...';
+        const ipCity = await getLocationFromIP();
+        if (ipCity) {
+            detectedCity = ipCity;
+            source = "IP";
+            console.log("✅ Location detected via IP:", detectedCity);
         }
     }
-
+    
+    // Standardize the location name
+    let finalLocation = "Ashaiman";
+    if (detectedCity) {
+        finalLocation = standardizeGhanaLocation(detectedCity);
+    }
+    
     // Store current location
-    currentDetectedLocation = detectedLocation;
-    input.value = detectedLocation;
+    currentDetectedLocation = finalLocation;
+    inputElement.value = finalLocation;
     
-    // Display with VPN indicator if applicable
-    if (isVPN) {
-        text.innerHTML = `<i class="fas fa-shield-alt"></i> ${detectedLocation} <span style="font-size: 10px; background: rgba(255,193,7,0.3); padding: 2px 6px; border-radius: 20px;">VPN</span>`;
-    } else {
-        text.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${detectedLocation}`;
-    }
+    // Update display
+    const sourceIcon = source === "GPS" ? "fa-satellite-dish" : "fa-globe";
+    textElement.innerHTML = `<i class="fas ${sourceIcon}"></i> ${finalLocation}`;
     
-    console.log("Final location set to:", detectedLocation);
-    return detectedLocation;
+    console.log(`📍 Final location: ${finalLocation} (source: ${source})`);
+    return finalLocation;
 }
 
 // ================= MOOD SELECTION =================
@@ -586,11 +656,6 @@ document.getElementById("doneBtn").onclick = () => {
 
 // Initialize location detection
 detectLocation();
-
-// Refresh location every 2 minutes
-setInterval(() => {
-    detectLocation();
-}, 120000);
 </script>
 
 </body>
