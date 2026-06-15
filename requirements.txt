@@ -1,2 +1,5 @@
 flask
 gunicorn
+flask-cors
+requests
+pywa
