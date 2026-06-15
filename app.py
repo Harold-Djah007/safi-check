@@ -9,14 +9,14 @@ app = Flask(__name__)
 
 def init_db():
     conn = sqlite3.connect('safi_check.db')
-    # REMOVED DEFAULT 'Ashaiman' - now location is required from form
+    # Removed DEFAULT 'Ashaiman' - location comes from form
     conn.execute('''CREATE TABLE IF NOT EXISTS checkins
                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
                      mood TEXT, 
                      comments TEXT, 
                      submission_date TIMESTAMP,
                      ip_address TEXT,
-                     location TEXT)''')  # ← Removed DEFAULT 'Ashaiman'
+                     location TEXT)''')
     
     conn.execute('''CREATE TABLE IF NOT EXISTS checkin_issues
                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,6 +51,30 @@ def init_db():
     print("✅ Database initialized")
 
 init_db()
+
+# ==================== HELPER FUNCTION FOR SAFE TIMESTAMP PARSING ====================
+def safe_parse_timestamp(timestamp_str):
+    """Safely parse timestamp from SQLite to ISO format"""
+    if not timestamp_str:
+        return None, None
+    
+    try:
+        # Try standard format first: 'YYYY-MM-DD HH:MM:SS'
+        dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        try:
+            # Try ISO format with microseconds: 'YYYY-MM-DD HH:MM:SS.ffffff'
+            dt = datetime.fromisoformat(timestamp_str.replace(' ', 'T'))
+        except:
+            try:
+                # Try direct ISO format
+                dt = datetime.fromisoformat(timestamp_str)
+            except:
+                # Last resort: use current time
+                print(f"⚠️ Could not parse timestamp: {timestamp_str}")
+                dt = datetime.now()
+    
+    return dt, dt.isoformat()
 
 # ==================== ROUTES ====================
 
@@ -104,13 +128,18 @@ def get_feedback():
                 if kw in comments_lower and kw not in red_flags:
                     red_flags.append(kw)
         
-        # Get day of week
+        # FIX 1 & 2: Safely parse timestamp to ISO format
+        dt_obj, iso_timestamp = safe_parse_timestamp(row['submission_date'])
+        
+        # Get day of week from parsed datetime
         day = ""
-        if row['submission_date']:
-            try:
-                day = datetime.strptime(row['submission_date'], '%Y-%m-%d %H:%M:%S').strftime('%A')
-            except:
-                day = "Unknown"
+        if dt_obj:
+            day = dt_obj.strftime('%A')
+        
+        # Create display timestamp for UI
+        display_timestamp = ""
+        if dt_obj:
+            display_timestamp = dt_obj.strftime('%m/%d/%Y, %I:%M:%S %p')
         
         # Get location - could be NULL from old entries, so provide fallback
         location = row['location'] if row['location'] else 'Ashaiman'
@@ -123,8 +152,9 @@ def get_feedback():
             'comment': row['comments'] or '',
             'ip': row['ip_address'] or '127.0.0.1',
             'redFlags': red_flags,
-            'timestamp': row['submission_date'],
-            'timestampDisplay': datetime.strptime(row['submission_date'], '%Y-%m-%d %H:%M:%S').strftime('%m/%d/%Y, %I:%M:%S %p') if row['submission_date'] else '',
+            # FIX 1: Send ISO format timestamp that JS can parse reliably
+            'timestamp': iso_timestamp,
+            'timestampDisplay': display_timestamp,
             'day': day,
             'issues': issues,
             'hasRedFlag': len(red_flags) > 0
@@ -159,7 +189,7 @@ def delete_feedback():
 def submit():
     try:
         mood = request.form.get('mood')
-        # FIXED: Get location from form, fallback to 'Ashaiman' if not provided
+        # Get location from form, fallback to 'Ashaiman' if not provided
         location = request.form.get('location') or 'Ashaiman'
         issues_list = request.form.getlist('issues')
         comments = request.form.get('comments', '').strip()
@@ -174,10 +204,12 @@ def submit():
         conn = sqlite3.connect('safi_check.db')
         cursor = conn.cursor()
         
-        # FIXED: INSERT with location from form (no default in DB anymore)
+        # Store timestamp in standard format (no microseconds for consistency)
+        current_time = datetime.now().replace(microsecond=0)
+        
         cursor.execute("""INSERT INTO checkins (mood, comments, submission_date, ip_address, location) 
                           VALUES (?, ?, ?, ?, ?)""",
-                      (mood, comments, datetime.now(), ip_address, location))
+                      (mood, comments, current_time, ip_address, location))
         checkin_id = cursor.lastrowid
         
         for issue in issues_list:
@@ -307,7 +339,6 @@ def api_delete_user():
 
 @app.route('/api/login-logs', methods=['GET'])
 def api_get_login_logs():
-    # Simple login logs from memory (you can expand this)
     return jsonify([])
 
 if __name__ == '__main__':
