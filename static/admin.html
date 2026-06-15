@@ -121,7 +121,7 @@
             font-weight: 500;
             color: #1b4d2e;
         }
-        .logout-btn, .refresh-btn, .export-btn, .users-btn, .passwords-btn {
+        .logout-btn, .refresh-btn, .export-btn, .users-btn, .passwords-btn, .report-btn {
             padding: 10px 20px;
             border: none;
             border-radius: 40px;
@@ -134,6 +134,7 @@
         .export-btn { background: #1b4d2e; color: white; }
         .users-btn { background: #8b5cf6; color: white; }
         .passwords-btn { background: #f59e0b; color: white; }
+        .report-btn { background: #06b6d4; color: white; }
         
         /* Stats Grid */
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
@@ -210,6 +211,41 @@
         .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
         canvas { max-height: 200px; }
         .trend-stats { text-align: center; margin-top: 12px; font-size: 0.85rem; color: #4a627a; }
+        
+        /* Weekly Report Styles */
+        .weekly-report {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-left: 4px solid #06b6d4;
+        }
+        .report-content {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            margin-bottom: 12px;
+        }
+        .report-content pre {
+            background: none;
+            padding: 0;
+            margin: 0;
+            font-family: monospace;
+        }
+        .generate-report-btn {
+            background: #06b6d4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        .generate-report-btn:hover {
+            background: #0891b2;
+        }
         
         /* Modal Styles */
         .modal {
@@ -382,7 +418,7 @@
     </div>
 </div>
 
-<!-- User Management Modal - Admin can view, reset, and delete users -->
+<!-- User Management Modal -->
 <div id="userManagementModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -392,12 +428,7 @@
         <div style="overflow-x: auto;">
             <table class="password-table">
                 <thead>
-                    <tr>
-                        <th>Username</th>
-                        <th>Password (Visible to Admin)</th>
-                        <th>Created At</th>
-                        <th>Actions</th>
-                    </tr>
+                    <tr><th>Username</th><th>Password (Visible to Admin)</th><th>Created At</th><th>Actions</th></tr>
                 </thead>
                 <tbody id="userManagementBody"></tbody>
             </table>
@@ -450,9 +481,18 @@
                 <h3><i class="fas fa-exclamation-triangle"></i> Common Issues Reported</h3>
                 <div id="issuesList"></div>
             </div>
-            <div class="stat-card">
-                <h3><i class="fas fa-clock"></i> Recent Activity</h3>
-                <div id="recentList"></div>
+            <!-- Weekly Intelligence Report Card -->
+            <div class="stat-card weekly-report">
+                <h3><i class="fas fa-file-alt"></i> 📋 Weekly Intelligence Report</h3>
+                <div id="weeklyReportContent" class="report-content">
+                    Loading report...
+                </div>
+                <button class="generate-report-btn" onclick="generateWeeklyReport()">
+                    <i class="fas fa-sync-alt"></i> Generate Report
+                </button>
+                <small style="display: block; margin-top: 8px; color: #6c86a3;">
+                    <i class="fas fa-info-circle"></i> Auto-generates every Thursday
+                </small>
             </div>
         </div>
 
@@ -464,6 +504,10 @@
 </div>
 
 <script>
+    // ==================== WEEKLY REPORT CONSTANTS ====================
+    const WEEKLY_REPORT_KEY = 'saficheck_weekly_report';
+    const LAST_REPORT_WEEK_KEY = 'saficheck_last_report_week';
+    
     // ==================== HELPER FUNCTIONS ====================
     function getCurrentTimestamp() {
         const now = new Date();
@@ -474,6 +518,114 @@
             time: now.toLocaleTimeString(),
             full: `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`
         };
+    }
+    
+    // ==================== WEEK NUMBER HELPER ====================
+    function getWeekNumber(date) {
+        const d = new Date(date);
+        d.setHours(0,0,0,0);
+        d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+        const yearStart = new Date(d.getFullYear(),0,1);
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+    
+    // ==================== AI SUMMARY ENGINE ====================
+    function generateAIAnalysis(dataSet, weekLabel = "Current Week") {
+        if (!dataSet.length) {
+            return "📊 No feedback data available for this period.";
+        }
+
+        const total = dataSet.length;
+        const avgMood = (dataSet.reduce((sum, item) => sum + (item.moodScore || 0), 0) / total).toFixed(1);
+        const redFlagCount = dataSet.filter(item => item.redFlags && item.redFlags.length > 0).length;
+        const redFlagRate = ((redFlagCount / total) * 100).toFixed(1);
+
+        let summary = `
+📋 SafiCheck Weekly Intelligence Report
+
+📊 Total Responses: ${total}
+
+😊 Average Mood Score: ${avgMood}/10
+
+⚠️ Red Flag Rate: ${redFlagRate}%
+
+`;
+
+        if (avgMood >= 7) {
+            summary += "✅ Overall sentiment is positive. Employees seem satisfied.\n";
+        } else if (avgMood >= 5) {
+            summary += "⚠️ Employee sentiment is moderate. There's room for improvement.\n";
+        } else {
+            summary += "🚨 Employee sentiment is low and needs immediate attention.\n";
+        }
+        
+        if (redFlagRate > 10) {
+            summary += `🔴 High red flag rate (${redFlagRate}%) requires management review.\n`;
+        } else if (redFlagRate > 5) {
+            summary += `🟠 Moderate red flag rate (${redFlagRate}%). Monitor closely.\n`;
+        } else {
+            summary += `🟢 Low red flag rate (${redFlagRate}%). Good workplace environment.\n`;
+        }
+        
+        summary += `\n📅 Period: ${weekLabel}\n`;
+        summary += `🕐 Generated: ${new Date().toLocaleString()}\n`;
+        
+        return summary;
+    }
+    
+    // ==================== WEEKLY DATA FUNCTION ====================
+    function getCurrentWeekData() {
+        const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        return feedbackData.filter(item => new Date(item.timestamp).getTime() >= oneWeekAgo);
+    }
+    
+    // ==================== GENERATE WEEKLY REPORT ====================
+    function generateWeeklyReport() {
+        const weekData = getCurrentWeekData();
+        const report = generateAIAnalysis(weekData, "This Week");
+        localStorage.setItem(WEEKLY_REPORT_KEY, report);
+        localStorage.setItem(LAST_REPORT_WEEK_KEY, new Date().toISOString());
+        renderWeeklyReport();
+        return report;
+    }
+    
+    // ==================== DISPLAY WEEKLY REPORT ====================
+    function renderWeeklyReport() {
+        const report = localStorage.getItem(WEEKLY_REPORT_KEY);
+        const reportDate = localStorage.getItem(LAST_REPORT_WEEK_KEY);
+        const reportContainer = document.getElementById("weeklyReportContent");
+
+        if (!reportContainer) return;
+
+        if (!report) {
+            reportContainer.innerHTML = "No weekly report generated yet. Click 'Generate Report' to create one.";
+            return;
+        }
+
+        reportContainer.innerHTML = `
+            <pre style="background:none; padding:0; margin:0; font-family:monospace; font-size:12px; line-height:1.5; white-space:pre-wrap;">${report}</pre>
+            <small style="display:block; margin-top:8px; color:#6c86a3;">
+                <i class="fas fa-calendar-alt"></i> Generated: ${new Date(reportDate).toLocaleString()}
+            </small>
+        `;
+    }
+    
+    // ==================== THURSDAY AUTO-GENERATION ====================
+    function scheduleThursdayAutoReport() {
+        const today = new Date();
+        const day = today.getDay(); // 4 = Thursday
+        const reportDate = localStorage.getItem(LAST_REPORT_WEEK_KEY);
+        const thisWeek = today.getFullYear() + "-" + getWeekNumber(today);
+
+        if (day === 4) { // Thursday
+            if (reportDate) {
+                const lastWeek = new Date(reportDate).getFullYear() + "-" + getWeekNumber(new Date(reportDate));
+                if (lastWeek === thisWeek) {
+                    return; // Already generated this week
+                }
+            }
+            generateWeeklyReport();
+        }
     }
     
     // ==================== PASSWORD TOGGLE ====================
@@ -563,7 +715,6 @@
         const users = getUsers();
         const session = getSession();
         
-        // Prevent deleting yourself
         if (session && session.username === username) {
             return { success: false, error: "You cannot delete your own account while logged in" };
         }
@@ -746,7 +897,6 @@
             if (result.success) {
                 alert(`User "${username}" has been deleted.`);
                 renderUserManagement();
-                // If the deleted user was logged in elsewhere, they'll be logged out on next action
             } else {
                 alert(result.error);
             }
@@ -814,6 +964,8 @@
             const response = await fetch('/api/feedback');
             feedbackData = await response.json();
             renderDashboard();
+            renderWeeklyReport();
+            scheduleThursdayAutoReport();
         } catch (error) { console.error('Error loading data:', error); }
     }
     
@@ -916,43 +1068,45 @@
     function setFilter(location) { currentFilter = location; renderDashboard(); }
     
     function exportToCSV() {
-    const data = getFilteredData();
-    const timestamp = getCurrentTimestamp();
-    
-    // Only ONE timestamp column - Local only
-    const headers = ['ID', 'Location', 'Rating', 'Mood Score', 'Comment', 'Issues', 'Red Flags', 'Date & Time'];
-    
-    const rows = data.map(item => [
-        item.id, 
-        item.location, 
-        item.rating, 
-        item.moodScore, 
-        item.comment || '', 
-        (item.issues || []).join('; '),
-        (item.redFlags || []).join('; '),
-        item.timestampDisplay || new Date(item.timestamp).toLocaleString()
-    ]);
-    
-    const csvContent = [headers, ...rows].map(row => 
-        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-    ).join('\n');
-    
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `saficheck_data_${timestamp.date.replace(/\//g, '-')}_${timestamp.time.replace(/:/g, '-')}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-}
+        const data = getFilteredData();
+        const timestamp = getCurrentTimestamp();
+        const headers = ['ID', 'Location', 'Rating', 'Mood Score', 'Comment', 'Issues', 'Red Flags', 'Date & Time'];
+        const rows = data.map(item => [
+            item.id, item.location, item.rating, item.moodScore, 
+            item.comment || '', (item.issues || []).join('; '),
+            (item.redFlags || []).join('; '),
+            item.timestampDisplay || new Date(item.timestamp).toLocaleString()
+        ]);
+        const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `saficheck_data_${timestamp.date.replace(/\//g, '-')}_${timestamp.time.replace(/:/g, '-')}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
     
     // Make global
-    window.setFilter = setFilter; window.loadData = loadData; window.deleteFeedback = deleteFeedback; window.exportToCSV = exportToCSV;
-    window.logout = logout; window.attemptSignup = attemptSignup; window.attemptLogin = attemptLogin; window.resetPassword = resetPassword;
-    window.showSignupView = showSignupView; window.showLoginView = showLoginView; window.showForgotPasswordView = showForgotPasswordView;
-    window.togglePassword = togglePassword; window.showUserLogModal = showUserLogModal; window.closeUserLogModal = closeUserLogModal;
-    window.showUserManagementModal = showUserManagementModal; window.closeUserManagementModal = closeUserManagementModal;
-    window.togglePasswordVisibility = togglePasswordVisibility; window.showResetUserModal = showResetUserModal;
+    window.setFilter = setFilter;
+    window.loadData = loadData;
+    window.deleteFeedback = deleteFeedback;
+    window.exportToCSV = exportToCSV;
+    window.logout = logout;
+    window.attemptSignup = attemptSignup;
+    window.attemptLogin = attemptLogin;
+    window.resetPassword = resetPassword;
+    window.showSignupView = showSignupView;
+    window.showLoginView = showLoginView;
+    window.showForgotPasswordView = showForgotPasswordView;
+    window.togglePassword = togglePassword;
+    window.showUserLogModal = showUserLogModal;
+    window.closeUserLogModal = closeUserLogModal;
+    window.showUserManagementModal = showUserManagementModal;
+    window.closeUserManagementModal = closeUserManagementModal;
+    window.togglePasswordVisibility = togglePasswordVisibility;
+    window.showResetUserModal = showResetUserModal;
     window.confirmDeleteUser = confirmDeleteUser;
+    window.generateWeeklyReport = generateWeeklyReport;
     
     // Initialize
     localStorage.removeItem(SESSION_KEY);
