@@ -2,7 +2,6 @@ from flask import Flask, render_template, send_from_directory, request, jsonify
 import sqlite3
 from datetime import datetime
 import json
-import re
 
 app = Flask(__name__)
 
@@ -31,22 +30,6 @@ def init_db():
                      details TEXT, 
                      acknowledged BOOLEAN DEFAULT 0,
                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # Create users table for admin authentication
-    conn.execute('''CREATE TABLE IF NOT EXISTS users
-                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     username TEXT UNIQUE,
-                     password TEXT,
-                     created_at TIMESTAMP)''')
-    
-    # Check if admin exists, if not create default
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
-    if not cursor.fetchone():
-        cursor.execute("INSERT INTO users (username, password, created_at) VALUES (?, ?, ?)",
-                       ('admin', 'admin123', datetime.now()))
-    
-    conn.commit()
     conn.close()
     print("✅ Database initialized")
 
@@ -92,7 +75,7 @@ def get_feedback():
             mood_score = 3
         
         # Check for red flags in comments (also stored in alerts)
-        red_flags = [a['keyword'] for a in alerts if a['severity'] in ['critical', 'high']]
+        red_flags = [a['keyword'] for a in alerts if a['severity'] == 'high']
         
         # Also check comments directly for additional keywords
         if row['comments']:
@@ -112,19 +95,15 @@ def get_feedback():
             except:
                 day = "Unknown"
         
-        # Get location with fallback
-        location = row['location'] or 'Ashaiman'
-        
         feedback.append({
             'id': row['id'],
-            'location': location,
+            'location': row['location'] or 'Ashaiman',
             'rating': rating,
             'moodScore': mood_score,
             'comment': row['comments'] or '',
             'ip': row['ip_address'] or '127.0.0.1',
             'redFlags': red_flags,
             'timestamp': row['submission_date'],
-            'timestampDisplay': datetime.strptime(row['submission_date'], '%Y-%m-%d %H:%M:%S').strftime('%m/%d/%Y, %I:%M:%S %p') if row['submission_date'] else '',
             'day': day,
             'issues': issues,
             'hasRedFlag': len(red_flags) > 0
@@ -159,27 +138,20 @@ def delete_feedback():
 def submit():
     try:
         mood = request.form.get('mood')
-        location = request.form.get('location')  # Get location from form
         issues_list = request.form.getlist('issues')
         comments = request.form.get('comments', '').strip()
         
         if not mood:
             return jsonify({'success': False, 'error': 'Please select your mood'}), 400
         
-        # Use detected location or fallback to Ashaiman
-        if not location or location == '':
-            location = 'Ashaiman'
-        
         ip_address = request.remote_addr
-        
-        print(f"📝 Received submission - Mood: {mood}, Location: {location}, Issues: {issues_list}")
         
         conn = sqlite3.connect('safi_check.db')
         cursor = conn.cursor()
         
         cursor.execute("""INSERT INTO checkins (mood, comments, submission_date, ip_address, location) 
                           VALUES (?, ?, ?, ?, ?)""",
-                      (mood, comments, datetime.now(), ip_address, location))
+                      (mood, comments, datetime.now(), ip_address, 'Ashaiman'))
         checkin_id = cursor.lastrowid
         
         for issue in issues_list:
@@ -216,7 +188,7 @@ def submit():
         conn.commit()
         conn.close()
         
-        print(f"✅ Saved: Mood={mood}, Location={location}, Issues={issues_list}, IP={ip_address}")
+        print(f"✅ Saved: Mood={mood}, Issues={issues_list}, IP={ip_address}")
         if alerts_created:
             print(f"🚨 RED FLAGS DETECTED: {', '.join(alerts_created)}")
         
@@ -224,93 +196,6 @@ def submit():
     except Exception as e:
         print(f"❌ Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-
-# ==================== USER AUTHENTICATION API ====================
-
-@app.route('/api/login', methods=['POST'])
-def api_login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    conn = sqlite3.connect('safi_check.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
-        return jsonify({'success': True, 'username': username})
-    else:
-        return jsonify({'success': False, 'error': 'Invalid credentials'})
-
-@app.route('/api/register', methods=['POST'])
-def api_register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    if len(password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'})
-    
-    conn = sqlite3.connect('safi_check.db')
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute("INSERT INTO users (username, password, created_at) VALUES (?, ?, ?)",
-                       (username, password, datetime.now()))
-        conn.commit()
-        conn.close()
-        return jsonify({'success': True})
-    except sqlite3.IntegrityError:
-        conn.close()
-        return jsonify({'success': False, 'error': 'Username already exists'})
-
-@app.route('/api/reset-password', methods=['POST'])
-def api_reset_password():
-    data = request.get_json()
-    username = data.get('username')
-    new_password = data.get('new_password')
-    
-    if len(new_password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'})
-    
-    conn = sqlite3.connect('safi_check.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET password = ? WHERE username = ?", (new_password, username))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True})
-
-@app.route('/api/users', methods=['GET'])
-def api_get_users():
-    conn = sqlite3.connect('safi_check.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, created_at FROM users")
-    users = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return jsonify(users)
-
-@app.route('/api/delete-user', methods=['POST'])
-def api_delete_user():
-    data = request.get_json()
-    username = data.get('username')
-    
-    if username == 'admin':
-        return jsonify({'success': False, 'error': 'Cannot delete default admin user'})
-    
-    conn = sqlite3.connect('safi_check.db')
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM users WHERE username = ?", (username,))
-    conn.commit()
-    conn.close()
-    return jsonify({'success': True})
-
-@app.route('/api/login-logs', methods=['GET'])
-def api_get_login_logs():
-    # Simple login logs from memory (you can expand this)
-    return jsonify([])
 
 if __name__ == '__main__':
     print("=" * 60)
