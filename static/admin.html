@@ -2,24 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>SafiCheck | Admin Dashboard - Weekly Report & Smart Analytics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafiCheck | Admin Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background: #f0f4f8;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        }
-
-        /* AUTH STYLES */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #f0f4f8; font-family: 'Inter', sans-serif; }
+        
+        /* Auth Overlay */
         .auth-overlay {
             position: fixed;
             top: 0;
@@ -31,41 +23,55 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: all 0.3s ease;
         }
         .auth-card {
             background: white;
             border-radius: 48px;
-            padding: 40px 32px;
+            padding: 48px 40px;
             width: 90%;
             max-width: 420px;
             text-align: center;
             box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-            animation: slideUp 0.4s ease;
         }
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px);}
-            to { opacity: 1; transform: translateY(0);}
+        .auth-card h2 { font-size: 2rem; background: linear-gradient(135deg, #0a2e1f, #1b4d2e); background-clip: text; -webkit-background-clip: text; color: transparent; margin-bottom: 8px; }
+        .auth-icon { font-size: 4rem; color: #2d6a4f; margin-bottom: 20px; }
+        
+        .password-container {
+            position: relative;
+            width: 100%;
+            margin: 12px 0;
         }
-        .auth-card h2 {
-            font-size: 1.8rem;
-            background: linear-gradient(135deg, #0a2e1f, #1b4d2e);
-            background-clip: text;
-            -webkit-background-clip: text;
-            color: transparent;
-        }
-        .auth-icon { font-size: 3.5rem; color: #2d6a4f; margin-bottom: 20px; }
-        .auth-card input {
+        .password-container input {
             width: 100%;
             padding: 14px 18px;
-            margin: 10px 0;
+            padding-right: 50px;
             border: 2px solid #e2e8f0;
             border-radius: 60px;
             font-size: 1rem;
             transition: 0.2s;
-            outline: none;
         }
-        .auth-card input:focus { border-color: #2d6a4f; }
+        .password-container input:focus { border-color: #2d6a4f; outline: none; }
+        .toggle-password {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #6c86a3;
+            font-size: 1.1rem;
+        }
+        .toggle-password:hover { color: #2d6a4f; }
+        
+        .auth-card input[type="text"], .auth-card input[type="password"] {
+            width: 100%;
+            padding: 14px 18px;
+            margin: 12px 0;
+            border: 2px solid #e2e8f0;
+            border-radius: 60px;
+            font-size: 1rem;
+            transition: 0.2s;
+        }
+        .auth-card input:focus { border-color: #2d6a4f; outline: none; }
         .auth-btn {
             background: #1b4d2e;
             color: white;
@@ -74,25 +80,23 @@
             border: none;
             border-radius: 60px;
             font-weight: 700;
+            font-size: 1rem;
             cursor: pointer;
             margin-top: 16px;
-            transition: 0.2s;
         }
-        .auth-btn:hover { background: #0a2e1f; transform: translateY(-2px);}
-        .switch-auth { margin-top: 20px; font-size: 0.85rem; color: #6c86a3; }
-        .switch-auth a { color: #1b4d2e; font-weight: 600; cursor: pointer; }
-        .error-msg { color: #c23b22; font-size: 0.8rem; display: none; background: #fee2e2; padding: 8px; border-radius: 30px; margin-top: 8px;}
-        .success-msg { color: #2b7a4b; background: #e0f2e8; padding: 8px; border-radius: 30px; display: none; margin-top: 8px;}
-
-        /* MAIN DASHBOARD */
-        .admin-dashboard {
-            display: none;
-            padding: 2rem 1.5rem;
-        }
-        .admin-container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+        .auth-btn:hover { background: #0a2e1f; transform: translateY(-2px); }
+        .switch-auth { margin-top: 20px; font-size: 0.9rem; color: #6c86a3; }
+        .switch-auth a { color: #1b4d2e; text-decoration: none; font-weight: 600; cursor: pointer; }
+        .error-msg { color: #dc2626; font-size: 0.8rem; margin-top: 10px; display: none; background: #fee2e2; padding: 10px; border-radius: 30px; }
+        .success-msg { color: #2b7a4b; font-size: 0.8rem; margin-top: 10px; display: none; background: #e0f2e8; padding: 10px; border-radius: 30px; }
+        
+        .forgot-password { margin-top: 12px; font-size: 0.8rem; }
+        .forgot-password a { color: #6c86a3; text-decoration: none; cursor: pointer; }
+        .forgot-password a:hover { color: #1b4d2e; text-decoration: underline; }
+        
+        /* Admin Dashboard */
+        .admin-dashboard { display: none; padding: 2rem; }
+        .admin-container { max-width: 1400px; margin: 0 auto; }
         .admin-header {
             display: flex;
             justify-content: space-between;
@@ -109,28 +113,44 @@
             -webkit-background-clip: text;
             color: transparent;
         }
-        .company-badge {
+        .session-user {
             background: #e8f5e9;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 600;
+            padding: 6px 15px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 500;
             color: #1b4d2e;
         }
-        .logout-btn, .export-btn, .refresh-btn, .weekly-report-btn {
-            padding: 10px 24px;
+        .logout-btn, .refresh-btn, .export-btn, .users-btn, .passwords-btn {
+            padding: 10px 20px;
             border: none;
             border-radius: 40px;
-            font-weight: 600;
             cursor: pointer;
-            transition: 0.2s;
+            font-weight: 600;
+            margin-left: 10px;
         }
         .logout-btn { background: #ef4444; color: white; }
-        .logout-btn:hover { background: #dc2626; }
-        .export-btn { background: #1b4d2e; color: white; }
-        .weekly-report-btn { background: #2d6a4f; color: white; margin-left: 8px; }
-        .weekly-report-btn:hover { background: #0a2e1f; transform: translateY(-2px);}
         .refresh-btn { background: #f1f5f9; border: 1px solid #cbd5e1; }
+        .export-btn { background: #1b4d2e; color: white; }
+        .users-btn { background: #8b5cf6; color: white; }
+        .passwords-btn { background: #f59e0b; color: white; }
+        
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: white;
+            border-radius: 28px;
+            padding: 1.5rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+        .stat-card h3 { margin-bottom: 1.2rem; font-size: 1.1rem; color: #1f4d2e; display: flex; align-items: center; gap: 8px; }
+        .daily-mood-container { display: flex; flex-direction: column; gap: 12px; }
+        .mood-row { display: flex; flex-direction: column; gap: 4px; }
+        .mood-row .mood-label { display: flex; justify-content: space-between; font-size: 0.85rem; }
+        .mood-bar { background: #edf2f7; border-radius: 30px; height: 28px; overflow: hidden; }
+        .mood-fill { height: 100%; border-radius: 30px; transition: width 0.3s; }
+        
         .location-filter { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.5rem; }
         .filter-chip {
             background: #f1f5f9;
@@ -138,69 +158,144 @@
             border-radius: 40px;
             cursor: pointer;
             font-size: 0.85rem;
+            transition: 0.2s;
         }
         .filter-chip.active { background: #2d6a4f; color: white; }
-        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
-        .stat-card {
+        .filter-chip:hover { background: #cbd5e1; }
+        
+        .alert-banner {
+            background: #dc2626;
+            color: white;
+            padding: 14px 20px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        
+        .feedback-log {
             background: white;
             border-radius: 28px;
             padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            border: 1px solid #e2e8f0;
+            margin-top: 1.5rem;
         }
-        .daily-mood-container { display: flex; flex-direction: column; gap: 12px; }
-        .mood-bar { background: #edf2f7; border-radius: 30px; height: 28px; overflow: hidden; }
-        .mood-fill { height: 100%; border-radius: 30px; transition: width 0.3s; }
-        .feedback-log { background: white; border-radius: 28px; padding: 1.5rem; margin-top: 1.5rem; }
         .feedback-item {
-            border-left: 3px solid #cbd5e1;
-            padding: 14px;
+            border-left: 4px solid #cbd5e1;
+            padding: 16px;
             margin-bottom: 12px;
             background: #f8fafc;
             border-radius: 16px;
         }
-        .feedback-item.red-flag { border-left-color: #d9381e; background: #fff8f6; }
-        .delete-btn { background: none; border: none; color: #d9381e; cursor: pointer; margin-left: 8px; }
-        .insight-panel {
-            background: linear-gradient(120deg, #f8fafc, #eef2ff);
-            border-radius: 28px;
-            padding: 1.5rem;
-            margin-top: 1.8rem;
-            border: 1px solid #cbd5e1;
-            box-shadow: 0 6px 14px rgba(0,0,0,0.03);
-        }
-        .insight-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-bottom: 2px dashed #2d6a4f;
-            padding-bottom: 12px;
-            margin-bottom: 20px;
-        }
-        .insight-header i { font-size: 2rem; color: #2d6a4f; }
-        .report-badge {
-            background: #2d6a4f;
-            color: white;
+        .feedback-item.red-flag { border-left-color: #dc2626; background: #fef2f2; }
+        .red-flag-tag {
+            background: #fee2e2;
+            color: #dc2626;
             padding: 4px 12px;
-            border-radius: 100px;
+            border-radius: 20px;
             font-size: 0.7rem;
             font-weight: 600;
+            display: inline-block;
         }
-        .insight-text {
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #dc2626;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: 10px;
+        }
+        .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
+        canvas { max-height: 200px; }
+        .trend-stats { text-align: center; margin-top: 12px; font-size: 0.85rem; color: #4a627a; }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
             background: white;
-            padding: 18px;
-            border-radius: 24px;
-            line-height: 1.5;
-            color: #1e293b;
-            white-space: pre-line;
+            border-radius: 32px;
+            padding: 30px;
+            max-width: 1000px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
         }
-        .last-report {
-            font-size: 0.7rem;
-            color: #4b5563;
-            margin-top: 12px;
-            text-align: right;
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
         }
-        @media (max-width: 768px) {
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #6c86a3;
+        }
+        .user-table, .password-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .user-table th, .user-table td, .password-table th, .password-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .user-table th, .password-table th {
+            background: #f1f5f9;
+            font-weight: 600;
+        }
+        .reset-btn {
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        .reset-btn:hover { background: #d97706; }
+        .view-btn {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        .view-btn:hover { background: #7c3aed; }
+        .delete-user-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .delete-user-btn:hover { background: #b91c1c; }
+        .warning-text { color: #dc2626; font-size: 12px; margin-top: 10px; }
+        
+        @media (max-width: 768px) { 
             .stats-grid { grid-template-columns: 1fr; }
             .admin-dashboard { padding: 1rem; }
         }
@@ -208,323 +303,661 @@
 </head>
 <body>
 
-<!-- AUTH OVERLAY -->
-<div id="authOverlay" class="auth-overlay">
-    <div id="signupView" class="auth-card" style="display: block;">
+<!-- AUTHENTICATION OVERLAY -->
+<div id="authOverlay" class="auth-overlay" style="display: flex;">
+    <!-- Login View -->
+    <div id="loginView" class="auth-card" style="display: block;">
+        <div class="auth-icon"><i class="fas fa-chart-line"></i></div>
+        <h2>Safi-Check</h2>
+        <p style="color: #6c86a3; margin-bottom: 20px;">Login to SafiCheck Dashboard</p>
+        <input type="text" id="loginUsername" placeholder="Username">
+        <div class="password-container">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('loginPassword', this)"></i>
+        </div>
+        <button class="auth-btn" onclick="attemptLogin()"><i class="fas fa-lock"></i> Login</button>
+        <div class="forgot-password">
+            <a onclick="showForgotPasswordView()">Forgot Password?</a>
+        </div>
+        <div class="switch-auth">
+            Don't have an account? <a onclick="showSignupView()">Sign up here</a>
+        </div>
+        <div id="loginError" class="error-msg"></div>
+    </div>
+
+    <!-- Sign Up View -->
+    <div id="signupView" class="auth-card" style="display: none;">
         <div class="auth-icon"><i class="fas fa-user-plus"></i></div>
         <h2>Create Account</h2>
-        <input type="text" id="signupUsername" placeholder="Username">
-        <input type="password" id="signupPassword" placeholder="Password (min 6)">
+        <p style="color: #6c86a3; margin-bottom: 20px;">Sign up to access SafiCheck Admin</p>
+        <input type="text" id="signupUsername" placeholder="Username" autocomplete="off">
+        <div class="password-container">
+            <input type="password" id="signupPassword" placeholder="Password (min 6 characters)">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('signupPassword', this)"></i>
+        </div>
         <button class="auth-btn" onclick="attemptSignup()"><i class="fas fa-check-circle"></i> Sign Up</button>
-        <div class="switch-auth">Already have an account? <a onclick="showLoginView()">Login here</a></div>
+        <div class="switch-auth">
+            Already have an account? <a onclick="showLoginView()">Login here</a>
+        </div>
         <div id="signupError" class="error-msg"></div>
         <div id="signupSuccess" class="success-msg"></div>
     </div>
-    <div id="loginView" class="auth-card" style="display: none;">
-        <div class="auth-icon"><i class="fas fa-shield-alt"></i></div>
-        <h2>Welcome Back</h2>
-        <input type="text" id="loginUsername" placeholder="Username">
-        <input type="password" id="loginPassword" placeholder="Password">
-        <button class="auth-btn" onclick="attemptLogin()"><i class="fas fa-lock"></i> Login</button>
-        <div class="switch-auth">Don't have an account? <a onclick="showSignupView()">Sign up here</a></div>
-        <div id="loginError" class="error-msg"></div>
+
+    <!-- Forgot Password View -->
+    <div id="forgotPasswordView" class="auth-card" style="display: none;">
+        <div class="auth-icon"><i class="fas fa-key"></i></div>
+        <h2>Reset Password</h2>
+        <p style="color: #6c86a3; margin-bottom: 20px;">Enter your username to reset password</p>
+        <input type="text" id="resetUsername" placeholder="Username">
+        <div class="password-container">
+            <input type="password" id="newPassword" placeholder="New Password (min 6 characters)">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('newPassword', this)"></i>
+        </div>
+        <div class="password-container">
+            <input type="password" id="confirmPassword" placeholder="Confirm New Password">
+            <i class="fas fa-eye toggle-password" onclick="togglePassword('confirmPassword', this)"></i>
+        </div>
+        <button class="auth-btn" onclick="resetPassword()"><i class="fas fa-sync-alt"></i> Reset Password</button>
+        <div class="switch-auth">
+            <a onclick="showLoginView()">← Back to Login</a>
+        </div>
+        <div id="resetError" class="error-msg"></div>
+        <div id="resetSuccess" class="success-msg"></div>
     </div>
 </div>
 
-<!-- DASHBOARD -->
+<!-- User Login History Modal -->
+<div id="userLogModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-history"></i> User Login History</h2>
+            <button class="close-modal" onclick="closeUserLogModal()">&times;</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="user-table">
+                <thead><tr><th>User</th><th>Login Time</th><th>IP</th><th>Status</th></tr></thead>
+                <tbody id="userLogBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- User Management Modal - Admin can view, reset, and delete users -->
+<div id="userManagementModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-users-cog"></i> User Management</h2>
+            <button class="close-modal" onclick="closeUserManagementModal()">&times;</button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="password-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Password (Visible to Admin)</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="userManagementBody"></tbody>
+            </table>
+        </div>
+        <div class="warning-text">
+            <i class="fas fa-exclamation-triangle"></i> Warning: Deleting a user is permanent and cannot be undone.
+        </div>
+    </div>
+</div>
+
+<!-- ADMIN DASHBOARD -->
 <div id="adminDashboard" class="admin-dashboard">
     <div class="admin-container">
         <div class="admin-header">
             <div>
-                <h1><i class="fas fa-chart-line"></i> SafiCheck 
-                    <span class="company-badge"><i class="fas fa-recycle"></i> Waste Management</span>
-                    <span id="sessionUser" style="font-size:0.8rem; margin-left: 12px;"><i class="fas fa-user-check"></i> Loading...</span>
-                </h1>
-                <p style="color:#4a627a;">Real-time feedback from Ashaiman | Kumasi | Netherlands • Weekly intelligence report every Thursday</p>
+                <h1><i class="fas fa-chart-line"></i> SafiCheck Dashboard</h1>
+                <p style="color: #4a627a; margin-top: 5px;">Real-time employee feedback with red flag alerts</p>
             </div>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                <button class="refresh-btn" onclick="refreshDashboard()"><i class="fas fa-sync-alt"></i> Refresh</button>
-                <button class="export-btn" onclick="exportData()"><i class="fas fa-download"></i> Export CSV</button>
-                <button class="weekly-report-btn" onclick="generateWeeklyReport(true)"><i class="fas fa-file-alt"></i> Generate Weekly Report</button>
+            <div>
+                <span class="session-user" id="sessionUser"><i class="fas fa-user"></i> Loading...</span>
+                <button class="passwords-btn" onclick="showUserManagementModal()"><i class="fas fa-users-cog"></i> Manage Users</button>
+                <button class="users-btn" onclick="showUserLogModal()"><i class="fas fa-history"></i> Login Logs</button>
+                <button class="refresh-btn" onclick="loadData()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <button class="export-btn" onclick="exportToCSV()"><i class="fas fa-download"></i> Export CSV</button>
                 <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
             </div>
         </div>
 
-        <div class="location-filter" id="locationFilter"></div>
+        <div id="alertBanner" style="display: none;" class="alert-banner">
+            <i class="fas fa-exclamation-triangle" style="font-size: 24px;"></i>
+            <span><strong>🚨 RED FLAG ALERTS!</strong> Employee comments contain misconduct keywords that require immediate attention.</span>
+        </div>
+
+        <div id="locationFilter" class="location-filter"></div>
+
         <div class="stats-grid">
             <div class="stat-card">
                 <h3><i class="fas fa-chart-line"></i> Daily Mood Score (1-10)</h3>
-                <div id="dailyMoodContainer" class="daily-mood-container"></div>
+                <div id="dailyMoodContainer" class="daily-mood-container"><div class="empty-state">Loading...</div></div>
             </div>
             <div class="stat-card">
-                <h3><i class="fas fa-chart-pie"></i> Weekly Mood Distribution</h3>
-                <canvas id="weeklyPieChart"></canvas>
+                <h3><i class="fas fa-chart-pie"></i> Mood Distribution</h3>
+                <canvas id="moodChart"></canvas>
                 <div id="trendStats" class="trend-stats"></div>
             </div>
         </div>
-        <div class="stats-grid">
-            <div class="stat-card"><h3><i class="fas fa-exclamation-triangle"></i> Common Complaints</h3><div id="complaintsList"></div></div>
-            <div class="stat-card"><h3><i class="fas fa-lightbulb"></i> Top Suggestions</h3><div id="suggestionsList"></div></div>
-        </div>
 
-        <!-- SafiCheck Weekly Intelligence Report Panel -->
-        <div class="insight-panel" id="insightPanel">
-            <div class="insight-header">
-                <i class="fas fa-chart-simple"></i>
-                <h2 style="margin:0;">📋 SafiCheck Weekly Intelligence Report</h2>
-                <span class="report-badge" id="reportCycleBadge">📅 Thursday Auto-Report</span>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3><i class="fas fa-exclamation-triangle"></i> Common Issues Reported</h3>
+                <div id="issuesList"></div>
             </div>
-            <div id="insightContent" class="insight-text">
-                <i class="fas fa-spinner fa-pulse"></i> Loading analysis... <br> 
-                <small>AI-powered analysis of sentiment, red flags, location risks & executive summary.</small>
+            <div class="stat-card">
+                <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+                <div id="recentList"></div>
             </div>
-            <div class="last-report" id="lastReportTime"></div>
         </div>
 
         <div class="feedback-log">
-            <h3><i class="fas fa-list"></i> All Feedback Entries <span id="feedbackCount"></span></h3>
+            <h3><i class="fas fa-list"></i> All Feedback Entries (<span id="feedbackCount">0</span>)</h3>
             <div id="feedbackLogs"></div>
         </div>
     </div>
 </div>
 
 <script>
-    // ==================== AUTH & STORAGE ====================
-    const USERS_KEY = 'saficheck_users';
-    const SESSION_KEY = 'saficheck_admin_session';
-    const SESSION_EXPIRY = 8 * 60 * 60 * 1000;
-    const WEEKLY_REPORT_KEY = 'saficheck_weekly_report';
-    const LAST_REPORT_WEEK_KEY = 'saficheck_last_report_week';
-
-    function initializeUsers() {
-        let users = JSON.parse(localStorage.getItem(USERS_KEY));
-        if (!users || users.length === 0) {
-            users = [{ id: 1, username: "admin", password: "admin123", createdAt: new Date().toISOString() }];
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
-        }
-        return users;
+    // ==================== HELPER FUNCTIONS ====================
+    function getCurrentTimestamp() {
+        const now = new Date();
+        return {
+            iso: now.toISOString(),
+            local: now.toLocaleString(),
+            date: now.toLocaleDateString(),
+            time: now.toLocaleTimeString(),
+            full: `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`
+        };
     }
-    function getUsers() { return JSON.parse(localStorage.getItem(USERS_KEY)) || initializeUsers(); }
+    
+    // ==================== PASSWORD TOGGLE ====================
+    function togglePassword(fieldId, iconElement) {
+        const passwordField = document.getElementById(fieldId);
+        if (passwordField.type === 'password') {
+            passwordField.type = 'text';
+            iconElement.classList.remove('fa-eye');
+            iconElement.classList.add('fa-eye-slash');
+        } else {
+            passwordField.type = 'password';
+            iconElement.classList.remove('fa-eye-slash');
+            iconElement.classList.add('fa-eye');
+        }
+    }
+    
+    // ==================== USER MANAGEMENT ====================
+    const USERS_KEY = 'saficheck_users';
+    const SESSION_KEY = 'saficheck_session';
+    const LOGIN_LOGS_KEY = 'saficheck_login_logs';
+    
+    function logUserLogin(username, status, ip = 'local') {
+        const logs = getLoginLogs();
+        const timestamp = getCurrentTimestamp();
+        logs.unshift({ 
+            id: Date.now(), 
+            username, 
+            loginTime: timestamp.iso,
+            loginTimeDisplay: timestamp.full,
+            ipAddress: ip, 
+            status 
+        });
+        while (logs.length > 100) logs.pop();
+        localStorage.setItem(LOGIN_LOGS_KEY, JSON.stringify(logs));
+    }
+    
+    function getLoginLogs() {
+        const logs = localStorage.getItem(LOGIN_LOGS_KEY);
+        return logs ? JSON.parse(logs) : [];
+    }
+    
+    function getUsers() {
+        const users = localStorage.getItem(USERS_KEY);
+        if (!users) {
+            const defaultUsers = [{ id: 1, username: 'admin', password: 'admin123', createdAt: new Date().toISOString(), createdAtDisplay: getCurrentTimestamp().full }];
+            saveUsers(defaultUsers);
+            return defaultUsers;
+        }
+        return JSON.parse(users);
+    }
+    
+    function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+    
     function findUserByUsername(username) { return getUsers().find(u => u.username === username); }
+    
     function createUser(username, password) {
-        if (findUserByUsername(username)) return { success: false, error: "Username taken" };
-        if (username.length < 3) return { success: false, error: "Min 3 chars" };
-        if (password.length < 6) return { success: false, error: "Min 6 chars" };
+        if (findUserByUsername(username)) return { success: false, error: "Username already taken" };
+        if (username.length < 3) return { success: false, error: "Username must be at least 3 characters" };
+        if (password.length < 6) return { success: false, error: "Password must be at least 6 characters" };
+        
         const users = getUsers();
-        users.push({ id: Date.now(), username, password, createdAt: new Date().toISOString() });
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        const timestamp = getCurrentTimestamp();
+        users.push({ 
+            id: Date.now(), 
+            username, 
+            password, 
+            createdAt: timestamp.iso,
+            createdAtDisplay: timestamp.full
+        });
+        saveUsers(users);
         return { success: true };
     }
+    
+    function resetUserPassword(username, newPassword) {
+        if (newPassword.length < 6) return { success: false, error: "Password must be at least 6 characters" };
+        
+        const users = getUsers();
+        const userIndex = users.findIndex(u => u.username === username);
+        if (userIndex === -1) return { success: false, error: "User not found" };
+        
+        users[userIndex].password = newPassword;
+        saveUsers(users);
+        return { success: true };
+    }
+    
+    function deleteUser(username) {
+        const users = getUsers();
+        const session = getSession();
+        
+        // Prevent deleting yourself
+        if (session && session.username === username) {
+            return { success: false, error: "You cannot delete your own account while logged in" };
+        }
+        
+        const userIndex = users.findIndex(u => u.username === username);
+        if (userIndex === -1) return { success: false, error: "User not found" };
+        
+        users.splice(userIndex, 1);
+        saveUsers(users);
+        return { success: true };
+    }
+    
     function validateLogin(username, password) {
         const user = findUserByUsername(username);
         if (user && user.password === password) return { success: true, user };
-        return { success: false, error: "Invalid credentials" };
+        return { success: false, error: "Invalid username or password" };
     }
-    function createSession(user) {
-        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id, username: user.username, loginTime: Date.now(), expiresAt: Date.now() + SESSION_EXPIRY }));
-    }
-    function getSession() {
-        const s = localStorage.getItem(SESSION_KEY);
-        if (!s) return null;
-        const session = JSON.parse(s);
-        if (session.expiresAt && Date.now() > session.expiresAt) { localStorage.removeItem(SESSION_KEY); return null; }
-        return session;
-    }
-    function isAuthenticated() { return getSession() !== null; }
-    function destroySession() { localStorage.removeItem(SESSION_KEY); }
-
-    // UI Auth
-    function showSignupView() { document.getElementById('signupView').style.display = 'block'; document.getElementById('loginView').style.display = 'none'; clearAuthErrors(); }
-    function showLoginView() { document.getElementById('signupView').style.display = 'none'; document.getElementById('loginView').style.display = 'block'; clearAuthErrors(); }
-    function clearAuthErrors() { document.querySelectorAll('.error-msg, .success-msg').forEach(el => el.style.display = 'none'); }
-    function showError(el, msg) { let e = document.getElementById(el); e.textContent = msg; e.style.display = 'block'; setTimeout(()=> e.style.display='none',3000); }
-    function showSuccess(el, msg) { let e = document.getElementById(el); e.textContent = msg; e.style.display = 'block'; setTimeout(()=> e.style.display='none',2000); }
-    function attemptSignup() { 
-        const res = createUser(document.getElementById('signupUsername').value.trim(), document.getElementById('signupPassword').value);
-        res.success ? (showSuccess('signupSuccess','Account created! Please login.'), setTimeout(showLoginView,1500)) : showError('signupError',res.error);
-    }
-    function attemptLogin() {
-        const res = validateLogin(document.getElementById('loginUsername').value.trim(), document.getElementById('loginPassword').value);
-        if(res.success) { createSession(res.user); showDashboard(); } 
-        else showError('loginError', res.error);
-    }
-    function logout() { destroySession(); location.reload(); }
     
-    let feedbackData = [], currentFilter = 'all', pieChart = null;
-
-    // Dashboard core
+    function createSession(user) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id, username: user.username, expiresAt: Date.now() + (8 * 60 * 60 * 1000) }));
+        return getSession();
+    }
+    
+    function getSession() {
+        const session = localStorage.getItem(SESSION_KEY);
+        if (!session) return null;
+        const parsed = JSON.parse(session);
+        if (parsed.expiresAt < Date.now()) { localStorage.removeItem(SESSION_KEY); return null; }
+        return parsed;
+    }
+    
+    function destroySession() { localStorage.removeItem(SESSION_KEY); }
+    function isAuthenticated() { return getSession() !== null; }
+    
+    // ==================== UI VIEWS ====================
+    function showSignupView() {
+        document.getElementById('signupView').style.display = 'block';
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('forgotPasswordView').style.display = 'none';
+        document.getElementById('signupError').style.display = 'none';
+        document.getElementById('signupSuccess').style.display = 'none';
+    }
+    
+    function showLoginView() {
+        document.getElementById('signupView').style.display = 'none';
+        document.getElementById('loginView').style.display = 'block';
+        document.getElementById('forgotPasswordView').style.display = 'none';
+        document.getElementById('loginError').style.display = 'none';
+        document.getElementById('loginUsername').value = '';
+        document.getElementById('loginPassword').value = '';
+    }
+    
+    function showForgotPasswordView() {
+        document.getElementById('signupView').style.display = 'none';
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('forgotPasswordView').style.display = 'block';
+        document.getElementById('resetError').style.display = 'none';
+        document.getElementById('resetSuccess').style.display = 'none';
+        document.getElementById('resetUsername').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+    }
+    
+    function resetPassword() {
+        const username = document.getElementById('resetUsername').value.trim();
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        if (!username) { showResetError('Please enter your username'); return; }
+        if (!newPassword) { showResetError('Please enter a new password'); return; }
+        if (newPassword !== confirmPassword) { showResetError('Passwords do not match'); return; }
+        
+        const result = resetUserPassword(username, newPassword);
+        if (result.success) {
+            document.getElementById('resetSuccess').textContent = 'Password reset successfully! Please login.';
+            document.getElementById('resetSuccess').style.display = 'block';
+            setTimeout(() => showLoginView(), 2000);
+        } else {
+            showResetError(result.error);
+        }
+    }
+    
+    function showResetError(msg) {
+        document.getElementById('resetError').textContent = msg;
+        document.getElementById('resetError').style.display = 'block';
+    }
+    
     function showDashboard() {
+        const session = getSession();
+        if (session) document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
         document.getElementById('authOverlay').style.display = 'none';
         document.getElementById('adminDashboard').style.display = 'block';
-        const session = getSession();
-        if(session) document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
         loadData();
-        scheduleThursdayAutoReport();
-    }
-
-    function loadData() {
-        if(!isAuthenticated()) return;
-        feedbackData = JSON.parse(localStorage.getItem('saficheck_all_feedback')) || [];
-        renderDashboard();
-        renderWeeklyReport();
-    }
-
-    function getFilteredData() { return currentFilter === 'all' ? feedbackData : feedbackData.filter(f => f.location === currentFilter); }
-    function getDailyMoodMap(entries) { const map=new Map(); entries.forEach(e=>{ map.set(e.day, (map.get(e.day)||0)+e.moodScore); }); const countMap=new Map(); entries.forEach(e=>{ countMap.set(e.day, (countMap.get(e.day)||0)+1); }); const avg=new Map(); ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(day=>{ let total=map.get(day)||0, cnt=countMap.get(day)||1; avg.set(day, Math.round(total/cnt)); }); return avg; }
-    function getWeeklyStats(entries) { let good=0,okay=0,diff=0; entries.forEach(e=>{ if(e.moodScore>=7) good++; else if(e.moodScore>=5) okay++; else diff++; }); const total=entries.length||1; return {good,okay,diff, goodPercent:Math.round(good/total*100), okayPercent:Math.round(okay/total*100), diffPercent:Math.round(diff/total*100), total:entries.length }; }
-    function getTopComplaints(entries){ const map=new Map(); const kw=['harassment','unsafe','bullying','accident','long queue','equipment','safety','noise','delay','truck']; entries.forEach(e=>{ if(e.comment){ let c=e.comment.toLowerCase(); kw.forEach(k=>{ if(c.includes(k)) map.set(k,(map.get(k)||0)+1); }); } }); return Array.from(map.entries()).sort((a,b)=>b[1]-a[1]).slice(0,4); }
-    function getTopSuggestions(entries){ const map=new Map(); entries.forEach(e=>{ if(e.comment && e.comment.length>10 && (e.comment.toLowerCase().includes('suggest')||e.comment.toLowerCase().includes('recommend')||e.comment.toLowerCase().includes('improve')||e.comment.toLowerCase().includes('better'))){ let snippet=e.comment.length>50?e.comment.slice(0,50)+'...':e.comment; map.set(snippet,(map.get(snippet)||0)+1); } }); return Array.from(map.entries()).sort((a,b)=>b[1]-a[1]).slice(0,3); }
-    
-    function renderDashboard() {
-        if(!isAuthenticated()) return;
-        const filtered = getFilteredData();
-        const locations = [...new Set(feedbackData.map(f=>f.location))];
-        let filterHtml = `<div class="filter-chip ${currentFilter==='all'?'active':''}" onclick="setFilter('all')">📍 All Locations (${feedbackData.length})</div>`;
-        locations.forEach(loc=>{ let cnt=feedbackData.filter(f=>f.location===loc).length; filterHtml+=`<div class="filter-chip ${currentFilter===loc?'active':''}" onclick="setFilter('${loc}')">🗑️ ${loc} (${cnt})</div>`; });
-        document.getElementById('locationFilter').innerHTML = filterHtml;
-
-        // daily mood
-        const moodMap = getDailyMoodMap(filtered);
-        const weekDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-        let moodHtml = '';
-        if(filtered.length===0) moodHtml='<div class="empty-state">No data available</div>';
-        else weekDays.forEach(day=>{ let score=moodMap.get(day)||0; let pct=score/10*100; let color=score>=7?'#2b7a4b':(score>=5?'#e68a2e':'#c23b22'); moodHtml+=`<div><div class="mood-label"><span>${day}</span><span>${score}/10</span></div><div class="mood-bar"><div class="mood-fill" style="width:${pct}%;background:${color};"></div></div></div>`; });
-        document.getElementById('dailyMoodContainer').innerHTML = moodHtml;
-
-        const stats = getWeeklyStats(filtered);
-        const ctx = document.getElementById('weeklyPieChart').getContext('2d');
-        if(pieChart) pieChart.destroy();
-        pieChart = new Chart(ctx, { type:'doughnut', data:{ labels:[`😊 Good (${stats.good})`,`😐 Okay (${stats.okay})`,`😔 Difficult (${stats.diff})`], datasets:[{ data:[stats.good,stats.okay,stats.diff], backgroundColor:['#2b7a4b','#e68a2e','#c23b22'], borderWidth:0 }] }, options:{ cutout:'55%', responsive:true, plugins:{ legend:{ position:'bottom' } } } });
-        document.getElementById('trendStats').innerHTML = `${stats.goodPercent}% Good · ${stats.okayPercent}% Okay · ${stats.diffPercent}% Difficult (${stats.total} entries)`;
-        
-        const complaints = getTopComplaints(filtered);
-        document.getElementById('complaintsList').innerHTML = complaints.length? complaints.map(([t,c])=>`<div class="complaint-item"><span><i class="fas fa-flag" style="color:#e68a2e;"></i> ${t}</span><span style="background:#e6f0fa;padding:2px 12px;border-radius:20px;">${c}</span></div>`).join('') : '<div class="empty-state">No complaints reported</div>';
-        const suggestions = getTopSuggestions(filtered);
-        document.getElementById('suggestionsList').innerHTML = suggestions.length? suggestions.map(([t,c])=>`<div class="suggestion-item"><span><i class="fas fa-star" style="color:#2d6a4f;"></i> "${t}"</span><span style="background:#e6f0fa;padding:2px 12px;border-radius:20px;">${c}</span></div>`).join('') : '<div class="empty-state">No suggestions yet</div>';
-        
-        document.getElementById('feedbackCount').innerHTML = `(${filtered.length})`;
-        document.getElementById('feedbackLogs').innerHTML = filtered.length? filtered.map(f=>`<div class="feedback-item ${f.redFlags?.length?'red-flag':''}"><div class="feedback-header"><div><span class="feedback-location"><i class="fas fa-map-marker-alt"></i> ${f.location}</span><span style="margin-left:8px;"><i class="fas ${f.rating==='good'?'fa-thumbs-up':'fa-thumbs-down'}"></i> ${f.rating==='good'?'Good':'Difficult'}</span></div><div><span class="feedback-ip"><i class="fas fa-network-wired"></i> ${f.ip}</span><button class="delete-btn" onclick="deleteFeedback(${f.id})"><i class="fas fa-trash-alt"></i></button></div></div><div class="feedback-comment"><i class="fas fa-comment"></i> "${f.comment||'No comment provided'}"</div><div style="font-size:0.7rem;margin-top:6px;"><i class="far fa-calendar-alt"></i> ${new Date(f.timestamp).toLocaleString()} ${f.redFlags?.length?` <span class="red-flag-tag" style="background:#fee2e2;padding:2px 8px;border-radius:20px;"><i class="fas fa-flag"></i> ${f.redFlags.join(', ')}</span>`:''}</div></div>`).join('') : '<div class="empty-state"><i class="fas fa-inbox"></i><br>No feedback submissions yet</div>';
-    }
-
-    window.setFilter = function(loc){ currentFilter=loc; renderDashboard(); renderWeeklyReport(); };
-    window.deleteFeedback = function(id){ if(confirm('Delete this feedback entry?')){ feedbackData=feedbackData.filter(f=>f.id!==id); localStorage.setItem('saficheck_all_feedback', JSON.stringify(feedbackData)); renderDashboard(); renderWeeklyReport(); } };
-    function refreshDashboard(){ loadData(); }
-    function exportData(){ const data=getFilteredData(); let csv="ID,Location,Rating,MoodScore,Comment,IP,RedFlags,Timestamp,Day\n"; data.forEach(f=>{ csv+=`${f.id},${f.location},${f.rating},${f.moodScore},"${(f.comment||'').replace(/"/g,'""')}",${f.ip},"${(f.redFlags||[]).join(';')}",${f.timestamp},${f.day}\n`; }); const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`saficheck_weekly_report_${new Date().toISOString().slice(0,19)}.csv`; a.click(); URL.revokeObjectURL(a.href); }
-
-    // ==================== SAFICHECK WEEKLY INTELLIGENCE ENGINE ====================
-    function generateAIAnalysis(dataSet, weekLabel = "Current Week") {
-        if(!dataSet.length) return "📊 **No feedback data available** for this period. Encourage more submissions to unlock insights.";
-        const total = dataSet.length;
-        const avgMood = (dataSet.reduce((s,e)=>s+e.moodScore,0)/total).toFixed(1);
-        const redFlagEntries = dataSet.filter(e=> e.redFlags && e.redFlags.length>0);
-        const redFlagRate = ((redFlagEntries.length/total)*100).toFixed(1);
-        const locationsRisk = {};
-        dataSet.forEach(e=>{ if(e.redFlags?.length){ locationsRisk[e.location] = (locationsRisk[e.location]||0)+1; } });
-        const topRiskLocation = Object.entries(locationsRisk).sort((a,b)=>b[1]-a[1])[0];
-        const sentimentTrend = avgMood >= 7 ? "positive & satisfied" : (avgMood >=5 ? "moderate with room for improvement" : "critical / low morale");
-        const commonThemes = extractKeyThemes(dataSet);
-        
-        let insight = `📊 **SafiCheck Weekly Intelligence Report** (${weekLabel})\n\n`;
-        insight += `📈 **Mood Index:** ${avgMood}/10 (${sentimentTrend}) across ${total} responses.\n`;
-        insight += `⚠️ **Risk Alert:** ${redFlagRate}% of feedback contained red-flag indicators (safety, harassment, bullying). `;
-        if(topRiskLocation) insight += `Highest risk location: **${topRiskLocation[0]}** with ${topRiskLocation[1]} flagged reports. `;
-        insight += `\n\n🔍 **Key Themes Detected:** ${commonThemes.join(', ') || "complaints about waste collection delays, equipment issues, or long queues"}.\n`;
-        insight += `💡 **Actionable Insights:** `;
-        if(avgMood < 5.5) insight += `Immediate operational review recommended at ${topRiskLocation? topRiskLocation[0] : "affected sites"}. Prioritize safety training and infrastructure improvements. `;
-        else if(redFlagRate > 15) insight += `High incident report rate — deploy anonymous reporting channels and de-escalation protocols. `;
-        else insight += `Maintain current trajectory; focus on top suggestions from community to improve satisfaction further. `;
-        insight += `\n\n📌 **Recommended Next Steps:** Schedule site visits in high-risk zones, prioritize complaint categories: ${getTopComplaints(dataSet).slice(0,2).map(([t])=>t).join(', ') || "general feedback analysis"}.`;
-        return insight;
     }
     
-    function extractKeyThemes(dataSet){
-        const words=[];
-        const keywords=['queue','safety','harassment','bin','truck','noise','clean','delay','staff','vehicle','equipment'];
-        dataSet.forEach(e=>{ if(e.comment){ let c=e.comment.toLowerCase(); keywords.forEach(kw=>{ if(c.includes(kw)) words.push(kw); }); } });
-        const freq={}; words.forEach(w=>freq[w]=(freq[w]||0)+1);
-        return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k);
+    function showAuthScreen() {
+        document.getElementById('authOverlay').style.display = 'flex';
+        document.getElementById('adminDashboard').style.display = 'none';
+        showLoginView();
     }
     
-    function getCurrentWeekData(){
-        const oneWeekAgo = Date.now() - 7*24*60*60*1000;
-        return feedbackData.filter(f=> new Date(f.timestamp).getTime() >= oneWeekAgo);
-    }
-    
-    function renderWeeklyReport(){
-        const weekData = getCurrentWeekData();
-        let analysisText = generateAIAnalysis(weekData, "This Week's Data");
-        const storedReport = localStorage.getItem(WEEKLY_REPORT_KEY);
-        const lastReportTimestamp = localStorage.getItem(LAST_REPORT_WEEK_KEY);
-        let finalHtml = `<div style="white-space:pre-line;">${analysisText}</div>`;
-        if(storedReport && lastReportTimestamp){
-            finalHtml += `<hr style="margin:16px 0; border-top:1px dashed #cbd5e1;"><div style="background:#f1f5f9; border-radius:20px; padding:12px;"><i class="fas fa-calendar-check"></i> <strong>📋 Latest Archived Report (Thursday Cycle):</strong><br>${storedReport}</div>`;
+    // ==================== MODAL FUNCTIONS ====================
+    function showUserLogModal() {
+        document.getElementById('userLogModal').style.display = 'flex';
+        const logs = getLoginLogs();
+        const tbody = document.getElementById('userLogBody');
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No login records yet</td></tr>';
+            return;
         }
-        document.getElementById('insightContent').innerHTML = finalHtml;
-        document.getElementById('lastReportTime').innerHTML = lastReportTimestamp ? `📅 Last archived report: ${new Date(parseInt(lastReportTimestamp)).toLocaleString()}` : '⏳ Waiting for first Thursday auto-report';
+        tbody.innerHTML = logs.map(log => `
+            <tr>
+                <td><strong>${log.username}</strong></td>
+                <td>${log.loginTimeDisplay || new Date(log.loginTime).toLocaleString()}</td>
+                <td>${log.ipAddress}</td>
+                <td style="color: ${log.status === 'success' ? '#2b7a4b' : log.status === 'logout' ? '#6c86a3' : '#dc2626'}">${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}</td>
+            </tr>
+        `).join('');
     }
     
-    // Generate and store official weekly report (Thursday cycle)
-    function generateAndStoreWeeklyReport(){
-        const weekData = getCurrentWeekData();
-        const fullAnalysis = generateAIAnalysis(weekData, "Thursday Official Weekly Report");
-        const enriched = `📋 **SAFICHECK WEEKLY INTELLIGENCE REPORT**\n📅 Generated on ${new Date().toLocaleString()} (Thursday cycle)\n\n${fullAnalysis}\n\n✅ This report includes sentiment shifts, risk pattern analysis, and operational recommendations based on crowd-sourced feedback data.`;
-        localStorage.setItem(WEEKLY_REPORT_KEY, enriched);
-        localStorage.setItem(LAST_REPORT_WEEK_KEY, Date.now().toString());
-        renderWeeklyReport();
-        return enriched;
+    function closeUserLogModal() { document.getElementById('userLogModal').style.display = 'none'; }
+    
+    function showUserManagementModal() {
+        document.getElementById('userManagementModal').style.display = 'flex';
+        renderUserManagement();
     }
     
-    // Auto-thursday detection
-    function scheduleThursdayAutoReport(){
-        const now = new Date();
-        const day = now.getDay(); // 4 = Thursday
-        const lastReportMs = localStorage.getItem(LAST_REPORT_WEEK_KEY);
-        const lastReportDate = lastReportMs ? new Date(parseInt(lastReportMs)) : null;
-        const isThursday = (day === 4);
-        let shouldGenerate = false;
-        if(isThursday){
-            if(!lastReportDate){
-                shouldGenerate = true;
+    function closeUserManagementModal() { document.getElementById('userManagementModal').style.display = 'none'; }
+    
+    function renderUserManagement() {
+        const users = getUsers();
+        const tbody = document.getElementById('userManagementBody');
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No users found</td></tr>';
+            return;
+        }
+        tbody.innerHTML = users.map(user => `
+            <tr>
+                <td><strong>${user.username}</strong></td>
+                <td class="password-cell">
+                    <span id="pwd-${user.id}">••••••</span>
+                    <button class="view-btn" onclick="togglePasswordVisibility(${user.id}, '${user.password.replace(/'/g, "\\'")}')">Show</button>
+                </td>
+                <td>${user.createdAtDisplay || new Date(user.createdAt).toLocaleString()}</td>
+                <td>
+                    <button class="reset-btn" onclick="showResetUserModal('${user.username}')">Reset</button>
+                    <button class="delete-user-btn" onclick="confirmDeleteUser('${user.username}')">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    function togglePasswordVisibility(userId, password) {
+        const span = document.getElementById(`pwd-${userId}`);
+        if (span.innerText === '••••••') {
+            span.innerText = password;
+        } else {
+            span.innerText = '••••••';
+        }
+    }
+    
+    function showResetUserModal(username) {
+        const newPassword = prompt(`Reset password for "${username}"\nEnter new password (min 6 characters):`);
+        if (newPassword && newPassword.length >= 6) {
+            const result = resetUserPassword(username, newPassword);
+            if (result.success) {
+                alert(`Password for "${username}" has been reset successfully!`);
+                renderUserManagement();
             } else {
-                const lastWeekNum = getWeekNumber(lastReportDate);
-                const thisWeekNum = getWeekNumber(now);
-                if(lastWeekNum !== thisWeekNum) shouldGenerate = true;
+                alert(result.error);
+            }
+        } else if (newPassword) {
+            alert('Password must be at least 6 characters');
+        }
+    }
+    
+    function confirmDeleteUser(username) {
+        if (confirm(`Are you sure you want to delete user "${username}"?\n\nThis action cannot be undone!`)) {
+            const result = deleteUser(username);
+            if (result.success) {
+                alert(`User "${username}" has been deleted.`);
+                renderUserManagement();
+                // If the deleted user was logged in elsewhere, they'll be logged out on next action
+            } else {
+                alert(result.error);
             }
         }
-        if(shouldGenerate && feedbackData.length>0){
-            generateAndStoreWeeklyReport();
-            const panel = document.getElementById('insightPanel');
-            const flash = document.createElement('div');
-            flash.innerText = "📋 Thursday Weekly Report auto-generated! Fresh SafiCheck intelligence available.";
-            flash.style.background="#2b7a4f"; flash.style.color="white"; flash.style.padding="8px"; flash.style.borderRadius="40px"; flash.style.marginTop="10px"; flash.style.textAlign="center";
-            panel.appendChild(flash);
-            setTimeout(()=>flash.remove(),5000);
+    }
+    
+    // ==================== AUTH ACTIONS ====================
+    function attemptSignup() {
+        const username = document.getElementById('signupUsername').value.trim();
+        const password = document.getElementById('signupPassword').value;
+        if (!username || !password) {
+            document.getElementById('signupError').textContent = 'Please fill in all fields';
+            document.getElementById('signupError').style.display = 'block';
+            return;
+        }
+        const result = createUser(username, password);
+        if (result.success) {
+            document.getElementById('signupSuccess').textContent = 'Account created! Please login.';
+            document.getElementById('signupSuccess').style.display = 'block';
+            setTimeout(() => showLoginView(), 2000);
+        } else {
+            document.getElementById('signupError').textContent = result.error;
+            document.getElementById('signupError').style.display = 'block';
         }
     }
     
-    function getWeekNumber(d) {
-        const date = new Date(d);
-        date.setHours(0,0,0,0);
-        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-        const week1 = new Date(date.getFullYear(),0,4);
-        return 1 + Math.round(((date - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    function attemptLogin() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!username || !password) {
+            logUserLogin(username, 'failed');
+            document.getElementById('loginError').textContent = 'Please enter username and password';
+            document.getElementById('loginError').style.display = 'block';
+            return;
+        }
+        const result = validateLogin(username, password);
+        if (result.success) {
+            logUserLogin(username, 'success');
+            createSession(result.user);
+            showDashboard();
+        } else {
+            logUserLogin(username, 'failed');
+            document.getElementById('loginError').textContent = result.error;
+            document.getElementById('loginError').style.display = 'block';
+            document.getElementById('loginPassword').value = '';
+        }
     }
     
-    window.generateWeeklyReport = function(showAlert=false){
-        if(!isAuthenticated()) return;
-        const newReport = generateAndStoreWeeklyReport();
-        if(showAlert) alert("✅ SafiCheck Weekly Intelligence Report generated & saved. Check the report panel.");
-        renderWeeklyReport();
-    };
+    function logout() {
+        const session = getSession();
+        if (session) logUserLogin(session.username, 'logout');
+        destroySession();
+        showAuthScreen();
+        if (moodChart) { moodChart.destroy(); moodChart = null; }
+    }
     
-    // Check every hour for Thursday auto-report
-    setInterval(()=>{ if(isAuthenticated() && document.visibilityState==='visible') scheduleThursdayAutoReport(); }, 3600000);
+    // ==================== DASHBOARD FUNCTIONS ====================
+    let feedbackData = [];
+    let currentFilter = 'all';
+    let moodChart = null;
     
-    // initial boot
-    initializeUsers();
-    if(isAuthenticated()) showDashboard(); else showAuthScreen();
-    window.attemptSignup=attemptSignup; window.attemptLogin=attemptLogin; window.showSignupView=showSignupView; window.showLoginView=showLoginView; window.logout=logout;
-    window.refreshDashboard=refreshDashboard; window.exportData=exportData;
+    async function loadData() {
+        if (!isAuthenticated()) return;
+        try {
+            const response = await fetch('/api/feedback');
+            feedbackData = await response.json();
+            renderDashboard();
+        } catch (error) { console.error('Error loading data:', error); }
+    }
+    
+    function getFilteredData() { return currentFilter === 'all' ? feedbackData : feedbackData.filter(f => f.location === currentFilter); }
+    
+    function renderDashboard() {
+        const filtered = getFilteredData();
+        document.getElementById('alertBanner').style.display = filtered.filter(f => f.redFlags?.length > 0).length > 0 ? 'flex' : 'none';
+        renderLocationFilters();
+        renderDailyMood(filtered);
+        renderMoodChart(filtered);
+        renderIssuesList(filtered);
+        renderRecentList(filtered);
+        renderFeedbackLogs(filtered);
+    }
+    
+    function renderLocationFilters() {
+        const locations = [...new Set(feedbackData.map(f => f.location))];
+        let html = `<div class="filter-chip ${currentFilter === 'all' ? 'active' : ''}" onclick="setFilter('all')">📍 All (${feedbackData.length})</div>`;
+        locations.forEach(loc => {
+            const count = feedbackData.filter(f => f.location === loc).length;
+            html += `<div class="filter-chip ${currentFilter === loc ? 'active' : ''}" onclick="setFilter('${loc}')">📍 ${loc} (${count})</div>`;
+        });
+        document.getElementById('locationFilter').innerHTML = html;
+    }
+    
+    function renderDailyMood(data) {
+        const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const dayScores = {};
+        weekDays.forEach(day => dayScores[day] = { total: 0, count: 0 });
+        data.forEach(item => { if (item.day && dayScores[item.day]) { dayScores[item.day].total += item.moodScore || 0; dayScores[item.day].count++; } });
+        const container = document.getElementById('dailyMoodContainer');
+        if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback data yet</div>'; return; }
+        let html = '';
+        weekDays.forEach(day => {
+            const avg = dayScores[day].count > 0 ? Math.round(dayScores[day].total / dayScores[day].count) : 0;
+            const percent = (avg / 10) * 100;
+            const color = avg >= 7 ? '#2b7a4b' : (avg >= 5 ? '#e68a2e' : '#c23b22');
+            html += `<div class="mood-row"><div class="mood-label"><span>${day}</span><span><strong>${avg}</strong>/10</span></div><div class="mood-bar"><div class="mood-fill" style="width: ${percent}%; background: ${color};"></div></div></div>`;
+        });
+        container.innerHTML = html;
+    }
+    
+    function renderMoodChart(data) {
+        const good = data.filter(f => f.rating === 'good').length;
+        const bad = data.filter(f => f.rating === 'bad').length;
+        const ctx = document.getElementById('moodChart');
+        if (moodChart) moodChart.destroy();
+        if (data.length === 0) {
+            moodChart = new Chart(ctx, { type: 'doughnut', data: { labels: ['No Data'], datasets: [{ data: [1], backgroundColor: ['#e2e8f0'] }] } });
+            document.getElementById('trendStats').innerHTML = 'No data available';
+            return;
+        }
+        moodChart = new Chart(ctx, { type: 'doughnut', data: { labels: [`👍 Good (${good})`, `👎 Difficult (${bad})`], datasets: [{ data: [good, bad], backgroundColor: ['#2b7a4b', '#c23b22'], borderWidth: 0 }] }, options: { cutout: '55%', responsive: true, plugins: { legend: { position: 'bottom' } } } });
+        document.getElementById('trendStats').innerHTML = `${data.length} total entries | ${good} Good · ${bad} Difficult`;
+    }
+    
+    function renderIssuesList(data) {
+        const issueCount = {};
+        data.forEach(item => { if (item.issues) item.issues.forEach(issue => { issueCount[issue] = (issueCount[issue] || 0) + 1; }); });
+        const sorted = Object.entries(issueCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const container = document.getElementById('issuesList');
+        if (sorted.length === 0) { container.innerHTML = '<div class="empty-state">No issues reported yet</div>'; return; }
+        container.innerHTML = sorted.map(([issue, count]) => `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e2e8f0;"><span><i class="fas fa-flag" style="color:#e68a2e;"></i> ${issue}</span><span style="background: #e6f0fa; padding: 2px 12px; border-radius: 20px;">${count}</span></div>`).join('');
+    }
+    
+    function renderRecentList(data) {
+        const recent = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 5);
+        const container = document.getElementById('recentList');
+        if (recent.length === 0) { container.innerHTML = '<div class="empty-state">No recent feedback</div>'; return; }
+        container.innerHTML = recent.map(item => `<div style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;"><div style="display: flex; justify-content: space-between;"><span style="font-weight: 600;">${item.rating === 'good' ? '👍 Good' : '👎 Difficult'}</span><small>${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small></div><div style="font-size: 0.85rem; color: #4b5563; margin-top: 5px;">${item.comment?.substring(0, 80) || 'No comment'}</div></div>`).join('');
+    }
+    
+    function renderFeedbackLogs(data) {
+        const container = document.getElementById('feedbackLogs');
+        document.getElementById('feedbackCount').innerText = data.length;
+        if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback submissions yet</div>'; return; }
+        const sorted = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        container.innerHTML = sorted.map(item => `
+            <div class="feedback-item ${item.redFlags?.length > 0 ? 'red-flag' : ''}">
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                    <div><strong>📍 ${item.location}</strong> <span>${item.rating === 'good' ? '👍' : '👎'} ${item.rating === 'good' ? 'Good' : 'Difficult'}</span> <span>Mood: ${item.moodScore}/10</span></div>
+                    <div><small>${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small><button onclick="deleteFeedback(${item.id})" class="delete-btn"><i class="fas fa-trash-alt"></i></button></div>
+                </div>
+                <div style="margin-top: 8px;">"${item.comment || 'No comment'}"</div>
+                ${item.issues?.length ? `<div style="margin-top: 6px;"><small>Issues: ${item.issues.join(', ')}</small></div>` : ''}
+                ${item.redFlags?.length ? `<div style="margin-top: 6px;"><span class="red-flag-tag">🚨 RED FLAG: ${item.redFlags.join(', ')}</span></div>` : ''}
+            </div>
+        `).join('');
+    }
+    
+    async function deleteFeedback(id) {
+        if (!confirm('Delete this feedback?')) return;
+        try {
+            await fetch('/api/feedback', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+            loadData();
+        } catch (error) { alert('Failed to delete'); }
+    }
+    
+    function setFilter(location) { currentFilter = location; renderDashboard(); }
+    
+    function exportToCSV() {
+    const data = getFilteredData();
+    const timestamp = getCurrentTimestamp();
+    
+    // Only ONE timestamp column - Local only
+    const headers = ['ID', 'Location', 'Rating', 'Mood Score', 'Comment', 'Issues', 'Red Flags', 'Date & Time'];
+    
+    const rows = data.map(item => [
+        item.id, 
+        item.location, 
+        item.rating, 
+        item.moodScore, 
+        item.comment || '', 
+        (item.issues || []).join('; '),
+        (item.redFlags || []).join('; '),
+        item.timestampDisplay || new Date(item.timestamp).toLocaleString()
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => 
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `saficheck_data_${timestamp.date.replace(/\//g, '-')}_${timestamp.time.replace(/:/g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+    
+    // Make global
+    window.setFilter = setFilter; window.loadData = loadData; window.deleteFeedback = deleteFeedback; window.exportToCSV = exportToCSV;
+    window.logout = logout; window.attemptSignup = attemptSignup; window.attemptLogin = attemptLogin; window.resetPassword = resetPassword;
+    window.showSignupView = showSignupView; window.showLoginView = showLoginView; window.showForgotPasswordView = showForgotPasswordView;
+    window.togglePassword = togglePassword; window.showUserLogModal = showUserLogModal; window.closeUserLogModal = closeUserLogModal;
+    window.showUserManagementModal = showUserManagementModal; window.closeUserManagementModal = closeUserManagementModal;
+    window.togglePasswordVisibility = togglePasswordVisibility; window.showResetUserModal = showResetUserModal;
+    window.confirmDeleteUser = confirmDeleteUser;
+    
+    // Initialize
+    localStorage.removeItem(SESSION_KEY);
+    showAuthScreen();
+    setInterval(() => { if (isAuthenticated() && document.visibilityState === 'visible') loadData(); }, 15000);
 </script>
 </body>
 </html>
