@@ -346,6 +346,38 @@
             background: #0891b2;
         }
         
+        /* Recent Activity Section */
+        .recent-activity {
+            background: white;
+            border-radius: 28px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            border: 1px solid #e2e8f0;
+        }
+        .recent-activity h3 {
+            margin-bottom: 1rem;
+            color: #1f4d2e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .recent-item {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .recent-item:last-child {
+            border-bottom: none;
+        }
+        .recent-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .recent-comment {
+            font-size: 0.85rem;
+            color: #4b5563;
+        }
+        
         /* Modal Styles */
         .modal {
             display: none;
@@ -637,6 +669,14 @@
                 <i class="fas fa-info-circle"></i> Auto-generates every Thursday
             </small>
         </div>
+
+        <!-- Recent Activity Section - FIXED: Added this missing element -->
+        <div class="recent-activity">
+            <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+            <div id="recentList">
+                <div class="empty-state">No recent feedback</div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -666,16 +706,17 @@
         return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
     }
     
-    // ==================== FILTER FUNCTION ====================
-    function filterByDateRange(data, startDate, endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-
-        return data.filter(item => {
-            const submissionDate = new Date(item.timestamp);
-            return submissionDate >= start && submissionDate <= end;
-        });
+    // ==================== SINGLE SOURCE OF TRUTH FOR FILTERING ====================
+    function getActiveData() {
+        // Start with base data
+        let data = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
+        
+        // Apply location filter if not 'all'
+        if (currentFilter !== 'all') {
+            data = data.filter(f => f.location === currentFilter);
+        }
+        
+        return data;
     }
     
     // ==================== SATISFACTION CALCULATION ====================
@@ -724,7 +765,7 @@
         
         currentFilteredData = filteredData;
         isFiltered = true;
-        updateDashboardWithStats(currentFilteredData);
+        updateDashboardWithStats();
     }
     
     function resetDateFilter() {
@@ -732,12 +773,25 @@
         document.getElementById("endDate").value = "";
         isFiltered = false;
         currentFilteredData = null;
-        updateDashboardWithStats(feedbackData);
+        updateDashboardWithStats();
+    }
+    
+    // ==================== FILTER FUNCTION ====================
+    function filterByDateRange(data, startDate, endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        return data.filter(item => {
+            const submissionDate = new Date(item.timestamp);
+            return submissionDate >= start && submissionDate <= end;
+        });
     }
     
     // ==================== UPDATE DASHBOARD WITH STATS ====================
-    function updateDashboardWithStats(data) {
-        const stats = calculateSatisfaction(data);
+    function updateDashboardWithStats() {
+        const activeData = getActiveData();
+        const stats = calculateSatisfaction(activeData);
         
         document.getElementById("totalSubmissions").innerText = stats.total;
         document.getElementById("thumbsUp").innerText = stats.up;
@@ -756,7 +810,7 @@
             satisfactionElement.classList.add('satisfaction-low');
         }
         
-        renderDashboard(data);
+        renderDashboard(activeData);
     }
     
     // ==================== AI SUMMARY ENGINE ====================
@@ -1194,24 +1248,19 @@
             const response = await fetch('/api/feedback');
             feedbackData = await response.json();
             console.log('✅ Loaded feedback data:', feedbackData.length, 'entries');
-            updateDashboardWithStats(feedbackData);
+            updateDashboardWithStats();
             renderWeeklyReport();
             scheduleThursdayAutoReport();
         } catch (error) { console.error('Error loading data:', error); }
     }
     
-    function getFilteredData() { 
-        const dataToFilter = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
-        return currentFilter === 'all' ? dataToFilter : dataToFilter.filter(f => f.location === currentFilter);
-    }
-    
-    function renderDashboard(data) {
-        const filtered = data || getFilteredData();
-        document.getElementById('alertBanner').style.display = filtered.filter(f => f.redFlags?.length > 0).length > 0 ? 'flex' : 'none';
+    function renderDashboard(activeData) {
+        const data = activeData || getActiveData();
+        document.getElementById('alertBanner').style.display = data.filter(f => f.redFlags?.length > 0).length > 0 ? 'flex' : 'none';
         renderLocationFilters();
-        renderDailyMood(filtered);
-        renderMoodChart(filtered);
-        renderRecentList(filtered);
+        renderDailyMood(data);
+        renderMoodChart(data);
+        renderRecentList(data);
     }
     
     function renderLocationFilters() {
@@ -1264,16 +1313,21 @@
         const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         const dayScores = {};
         weekDays.forEach(day => dayScores[day] = { total: 0, count: 0 });
+        
         data.forEach(item => { 
             const date = new Date(item.timestamp);
-            const dayName = weekDays[date.getDay() === 0 ? 6 : date.getDay() - 1];
+            // Fixed: Cleaner day index calculation
+            const dayIndex = (date.getDay() + 6) % 7;
+            const dayName = weekDays[dayIndex];
             if (dayName && dayScores[dayName]) {
                 dayScores[dayName].total += item.moodScore || 0;
                 dayScores[dayName].count++;
             }
         });
+        
         const container = document.getElementById('dailyMoodContainer');
         if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback data yet</div>'; return; }
+        
         let html = '';
         weekDays.forEach(day => {
             const avg = dayScores[day].count > 0 ? Math.round(dayScores[day].total / dayScores[day].count) : 0;
@@ -1289,6 +1343,7 @@
         const bad = data.filter(f => f.rating === 'bad').length;
         const ctx = document.getElementById('moodChart');
         if (moodChart) moodChart.destroy();
+        
         if (data.length === 0) {
             moodChart = new Chart(ctx, { type: 'doughnut', data: { labels: ['No Data'], datasets: [{ data: [1], backgroundColor: ['#e2e8f0'] }] } });
             document.getElementById('trendStats').innerHTML = 'No data available';
@@ -1301,19 +1356,25 @@
     function renderRecentList(data) {
         const recent = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 5);
         const container = document.getElementById('recentList');
-        if (recent.length === 0) { container.innerHTML = '<div class="empty-state">No recent feedback</div>'; return; }
-        container.innerHTML = recent.map(item => `<div style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;"><div style="display: flex; justify-content: space-between;"><span style="font-weight: 600;">${item.rating === 'good' ? '👍 Good' : '👎 Difficult'}</span><small>${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small></div><div style="font-size: 0.85rem; color: #4b5563; margin-top: 5px;">${item.comment?.substring(0, 80) || 'No comment'}</div></div>`).join('');
+        if (recent.length === 0) { 
+            container.innerHTML = '<div class="empty-state">No recent feedback</div>'; 
+            return; 
+        }
+        container.innerHTML = recent.map(item => `
+            <div class="recent-item">
+                <div class="recent-header">
+                    <span style="font-weight: 600;">${item.rating === 'good' ? '👍 Good' : '👎 Difficult'}</span>
+                    <small style="color: #6c86a3;">${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small>
+                </div>
+                <div class="recent-comment">${item.comment?.substring(0, 100) || 'No comment'}${item.comment?.length > 100 ? '...' : ''}</div>
+                <div style="margin-top: 5px;"><small><i class="fas fa-map-marker-alt"></i> ${item.location}</small></div>
+            </div>
+        `).join('');
     }
     
     function setFilter(location) { 
         currentFilter = location; 
-        const dataToRender = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
-        if (location === 'all') {
-            updateDashboardWithStats(dataToRender);
-        } else {
-            const filteredData = dataToRender.filter(f => f.location === location);
-            updateDashboardWithStats(filteredData);
-        }
+        updateDashboardWithStats();
     }
     
     function exportToCSV() {
@@ -1359,9 +1420,14 @@
     window.applyDateFilter = applyDateFilter;
     window.resetDateFilter = resetDateFilter;
     
-    // Initialize
-    localStorage.removeItem(SESSION_KEY);
-    showAuthScreen();
+    // Initialize - FIXED: Removed the line that clears session on every load
+    // Now session persists across page reloads
+    if (isAuthenticated()) {
+        showDashboard();
+    } else {
+        showAuthScreen();
+    }
+    
     setInterval(() => { if (isAuthenticated() && document.visibilityState === 'visible') loadData(); }, 15000);
 </script>
 </body>
