@@ -311,41 +311,6 @@
         }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
         
-        .feedback-log {
-            background: white;
-            border-radius: 28px;
-            padding: 1.5rem;
-            margin-top: 1.5rem;
-        }
-        .feedback-item {
-            border-left: 4px solid #cbd5e1;
-            padding: 16px;
-            margin-bottom: 12px;
-            background: #f8fafc;
-            border-radius: 16px;
-        }
-        .feedback-item.red-flag { border-left-color: #dc2626; background: #fef2f2; }
-        .red-flag-tag {
-            background: #fee2e2;
-            color: #dc2626;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            display: inline-block;
-        }
-        .delete-btn {
-            background: none;
-            border: none;
-            color: #dc2626;
-            cursor: pointer;
-            font-size: 1rem;
-            margin-left: 10px;
-        }
-        .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
-        canvas { max-height: 200px; }
-        .trend-stats { text-align: center; margin-top: 12px; font-size: 0.85rem; color: #4a627a; }
-        
         /* Weekly Report Styles */
         .weekly-report {
             background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
@@ -659,29 +624,18 @@
             </div>
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3><i class="fas fa-exclamation-triangle"></i> Common Issues Reported</h3>
-                <div id="issuesList"></div>
+        <!-- Weekly Intelligence Report Card (Full width) -->
+        <div class="stat-card weekly-report" style="grid-column: span 2;">
+            <h3><i class="fas fa-file-alt"></i> 📋 Weekly Intelligence Report</h3>
+            <div id="weeklyReportContent" class="report-content">
+                Loading report...
             </div>
-            <!-- Weekly Intelligence Report Card -->
-            <div class="stat-card weekly-report">
-                <h3><i class="fas fa-file-alt"></i> 📋 Weekly Intelligence Report</h3>
-                <div id="weeklyReportContent" class="report-content">
-                    Loading report...
-                </div>
-                <button class="generate-report-btn" onclick="generateWeeklyReport()">
-                    <i class="fas fa-sync-alt"></i> Generate Report
-                </button>
-                <small style="display: block; margin-top: 8px; color: #6c86a3;">
-                    <i class="fas fa-info-circle"></i> Auto-generates every Thursday
-                </small>
-            </div>
-        </div>
-
-        <div class="feedback-log">
-            <h3><i class="fas fa-list"></i> All Feedback Entries (<span id="feedbackCount">0</span>)</h3>
-            <div id="feedbackLogs"></div>
+            <button class="generate-report-btn" onclick="generateWeeklyReport()">
+                <i class="fas fa-sync-alt"></i> Generate Report
+            </button>
+            <small style="display: block; margin-top: 8px; color: #6c86a3;">
+                <i class="fas fa-info-circle"></i> Auto-generates every Thursday
+            </small>
         </div>
     </div>
 </div>
@@ -1257,9 +1211,7 @@
         renderLocationFilters();
         renderDailyMood(filtered);
         renderMoodChart(filtered);
-        renderIssuesList(filtered);
         renderRecentList(filtered);
-        renderFeedbackLogs(filtered);
     }
     
     function renderLocationFilters() {
@@ -1346,47 +1298,11 @@
         document.getElementById('trendStats').innerHTML = `${data.length} total entries | ${good} Good · ${bad} Difficult`;
     }
     
-    function renderIssuesList(data) {
-        const issueCount = {};
-        data.forEach(item => { if (item.issues) item.issues.forEach(issue => { issueCount[issue] = (issueCount[issue] || 0) + 1; }); });
-        const sorted = Object.entries(issueCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        const container = document.getElementById('issuesList');
-        if (sorted.length === 0) { container.innerHTML = '<div class="empty-state">No issues reported yet</div>'; return; }
-        container.innerHTML = sorted.map(([issue, count]) => `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e2e8f0;"><span><i class="fas fa-flag" style="color:#e68a2e;"></i> ${issue}</span><span style="background: #e6f0fa; padding: 2px 12px; border-radius: 20px;">${count}</span></div>`).join('');
-    }
-    
     function renderRecentList(data) {
         const recent = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 5);
         const container = document.getElementById('recentList');
         if (recent.length === 0) { container.innerHTML = '<div class="empty-state">No recent feedback</div>'; return; }
         container.innerHTML = recent.map(item => `<div style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;"><div style="display: flex; justify-content: space-between;"><span style="font-weight: 600;">${item.rating === 'good' ? '👍 Good' : '👎 Difficult'}</span><small>${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small></div><div style="font-size: 0.85rem; color: #4b5563; margin-top: 5px;">${item.comment?.substring(0, 80) || 'No comment'}</div></div>`).join('');
-    }
-    
-    function renderFeedbackLogs(data) {
-        const container = document.getElementById('feedbackLogs');
-        document.getElementById('feedbackCount').innerText = data.length;
-        console.log('📋 Rendering feedback logs, count:', data.length);
-        if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback submissions yet</div>'; return; }
-        const sorted = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        container.innerHTML = sorted.map(item => `
-            <div class="feedback-item ${item.redFlags?.length > 0 ? 'red-flag' : ''}">
-                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
-                    <div><strong>📍 ${item.location}</strong> <span>${item.rating === 'good' ? '👍' : '👎'} ${item.rating === 'good' ? 'Good' : 'Difficult'}</span> <span>Mood: ${item.moodScore}/10</span></div>
-                    <div><small>${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small><button onclick="deleteFeedback(${item.id})" class="delete-btn"><i class="fas fa-trash-alt"></i></button></div>
-                </div>
-                <div style="margin-top: 8px;">"${item.comment || 'No comment'}"</div>
-                ${item.issues?.length ? `<div style="margin-top: 6px;"><small>Issues: ${item.issues.join(', ')}</small></div>` : ''}
-                ${item.redFlags?.length ? `<div style="margin-top: 6px;"><span class="red-flag-tag">🚨 RED FLAG: ${item.redFlags.join(', ')}</span></div>` : ''}
-            </div>
-        `).join('');
-    }
-    
-    async function deleteFeedback(id) {
-        if (!confirm('Delete this feedback?')) return;
-        try {
-            await fetch('/api/feedback', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-            loadData();
-        } catch (error) { alert('Failed to delete'); }
     }
     
     function setFilter(location) { 
@@ -1423,7 +1339,6 @@
     // Make global
     window.setFilter = setFilter;
     window.loadData = loadData;
-    window.deleteFeedback = deleteFeedback;
     window.exportToCSV = exportToCSV;
     window.logout = logout;
     window.attemptSignup = attemptSignup;
