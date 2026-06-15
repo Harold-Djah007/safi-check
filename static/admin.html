@@ -1239,6 +1239,7 @@
         try {
             const response = await fetch('/api/feedback');
             feedbackData = await response.json();
+            console.log('✅ Loaded feedback data:', feedbackData.length, 'entries');
             updateDashboardWithStats(feedbackData);
             renderWeeklyReport();
             scheduleThursdayAutoReport();
@@ -1364,6 +1365,7 @@
     function renderFeedbackLogs(data) {
         const container = document.getElementById('feedbackLogs');
         document.getElementById('feedbackCount').innerText = data.length;
+        console.log('📋 Rendering feedback logs, count:', data.length);
         if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback submissions yet</div>'; return; }
         const sorted = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         container.innerHTML = sorted.map(item => `
