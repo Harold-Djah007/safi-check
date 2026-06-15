@@ -176,8 +176,8 @@ class NotificationScheduler:
     def __init__(self):
         self.last_sent_date = None
         self.running = True
-        self.target_hour_utc = 17  # 4:00 PM UTC
-        self.target_minute = 0
+        self.target_hour_utc = 16  # 4:00 PM UTC
+        self.target_minute = 30
     
     def get_active_numbers(self):
         """Get phone numbers from database"""
