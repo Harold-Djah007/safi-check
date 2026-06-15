@@ -246,7 +246,27 @@
             color: #c23b22;
         }
         
-        .location-filter { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        /* Enhanced Location Filter Styles */
+        .location-filter-container {
+            background: white;
+            border-radius: 20px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e2e8f0;
+        }
+        .location-filter-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #1f4d2e;
+        }
+        .location-filter {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
         .filter-chip {
             background: #f1f5f9;
             padding: 8px 20px;
@@ -254,9 +274,29 @@
             cursor: pointer;
             font-size: 0.85rem;
             transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
-        .filter-chip.active { background: #2d6a4f; color: white; }
-        .filter-chip:hover { background: #cbd5e1; }
+        .filter-chip i {
+            font-size: 0.8rem;
+        }
+        .filter-chip.active { 
+            background: #2d6a4f; 
+            color: white; 
+        }
+        .filter-chip.active i {
+            color: white;
+        }
+        .filter-chip:hover { 
+            background: #cbd5e1; 
+        }
+        .no-data-message {
+            text-align: center;
+            padding: 20px;
+            color: #94a3b8;
+            font-style: italic;
+        }
         
         .alert-banner {
             background: #dc2626;
@@ -596,12 +636,21 @@
             </div>
         </div>
 
-        <div id="locationFilter" class="location-filter"></div>
+        <!-- Enhanced Location Filter with Icons -->
+        <div class="location-filter-container">
+            <div class="location-filter-title">
+                <i class="fas fa-map-marker-alt"></i> Filter by Location
+                <span style="font-size: 12px; font-weight: normal; color: #6c86a3;">(Click to see responses from specific areas)</span>
+            </div>
+            <div id="locationFilter" class="location-filter">
+                <div class="empty-state">Loading locations...</div>
+            </div>
+        </div>
 
         <div class="stats-grid">
             <div class="stat-card">
                 <h3><i class="fas fa-chart-line"></i> Daily Mood Score (1-10)</h3>
-                <div id="dailyMoodContainer" class="daily-mood-container"><div class="empty-state">Loading...</div></div>
+                <div id="dailyMoodContainer" class="daily-mood-container"><div class="empty-state">No feedback data yet</div></div>
             </div>
             <div class="stat-card">
                 <h3><i class="fas fa-chart-pie"></i> Mood Distribution</h3>
@@ -1214,12 +1263,47 @@
     
     function renderLocationFilters() {
         const dataSource = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
-        const locations = [...new Set(dataSource.map(f => f.location))];
-        let html = `<div class="filter-chip ${currentFilter === 'all' ? 'active' : ''}" onclick="setFilter('all')">📍 All (${dataSource.length})</div>`;
-        locations.forEach(loc => {
-            const count = dataSource.filter(f => f.location === loc).length;
-            html += `<div class="filter-chip ${currentFilter === loc ? 'active' : ''}" onclick="setFilter('${loc}')">📍 ${loc} (${count})</div>`;
+        const locationMap = new Map();
+        
+        dataSource.forEach(f => {
+            const loc = f.location || "Unknown";
+            if (!locationMap.has(loc)) {
+                locationMap.set(loc, { count: 0, thumbsUp: 0, thumbsDown: 0 });
+            }
+            const stats = locationMap.get(loc);
+            stats.count++;
+            if (f.rating === 'good' || f.moodScore >= 7) {
+                stats.thumbsUp++;
+            } else {
+                stats.thumbsDown++;
+            }
         });
+        
+        const locations = Array.from(locationMap.entries()).sort((a, b) => b[1].count - a[1].count);
+        
+        let html = `<div class="filter-chip ${currentFilter === 'all' ? 'active' : ''}" onclick="setFilter('all')">
+            <i class="fas fa-globe"></i> All Locations 
+            <span style="background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 20px; margin-left: 6px;">${dataSource.length}</span>
+        </div>`;
+        
+        if (locations.length === 0) {
+            html = '<div class="no-data-message"><i class="fas fa-info-circle"></i> No feedback data available yet. Check-ins will appear here.</div>';
+        } else {
+            locations.forEach(([loc, stats]) => {
+                const satisfaction = stats.count > 0 ? ((stats.thumbsUp / stats.count) * 100).toFixed(0) : 0;
+                let moodIcon = '';
+                if (satisfaction >= 70) moodIcon = '😊';
+                else if (satisfaction >= 50) moodIcon = '😐';
+                else moodIcon = '😞';
+                
+                html += `<div class="filter-chip ${currentFilter === loc ? 'active' : ''}" onclick="setFilter('${loc.replace(/'/g, "\\'")}')">
+                    <i class="fas fa-map-marker-alt"></i> ${loc}
+                    <span style="background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 20px; margin: 0 4px;">${stats.count}</span>
+                    ${moodIcon} ${satisfaction}%
+                </div>`;
+            });
+        }
+        
         document.getElementById('locationFilter').innerHTML = html;
     }
     
@@ -1306,7 +1390,12 @@
     function setFilter(location) { 
         currentFilter = location; 
         const dataToRender = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
-        renderDashboard(dataToRender);
+        if (location === 'all') {
+            updateDashboardWithStats(dataToRender);
+        } else {
+            const filteredData = dataToRender.filter(f => f.location === location);
+            updateDashboardWithStats(filteredData);
+        }
     }
     
     function exportToCSV() {
