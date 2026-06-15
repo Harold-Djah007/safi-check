@@ -152,6 +152,100 @@
         .mood-bar { background: #edf2f7; border-radius: 30px; height: 28px; overflow: hidden; }
         .mood-fill { height: 100%; border-radius: 30px; transition: width 0.3s; }
         
+        /* Filter Panel Styles */
+        .filter-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1rem;
+            border: 1px solid #e2e8f0;
+        }
+        .filter-panel label {
+            font-weight: 600;
+            color: #374151;
+        }
+        .filter-panel input[type="date"] {
+            padding: 10px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+        }
+        .filter-panel input[type="date"]:focus {
+            outline: none;
+            border-color: #2d6a4f;
+        }
+        .filter-btn {
+            background: #2d6a4f;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .filter-btn:hover {
+            background: #1b4d2e;
+        }
+        .reset-filter-btn {
+            background: #6c86a3;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .reset-filter-btn:hover {
+            background: #4a627a;
+        }
+        
+        /* Stats Summary */
+        .stats-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-summary-card {
+            background: white;
+            border-radius: 20px;
+            padding: 1.2rem;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s;
+        }
+        .stat-summary-card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-summary-card .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+        .stat-summary-card .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        .stat-summary-card .stat-label {
+            font-size: 0.8rem;
+            color: #6c86a3;
+            margin-top: 4px;
+        }
+        .satisfaction-high {
+            color: #2b7a4b;
+        }
+        .satisfaction-medium {
+            color: #e68a2e;
+        }
+        .satisfaction-low {
+            color: #c23b22;
+        }
+        
         .location-filter { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.5rem; }
         .filter-chip {
             background: #f1f5f9;
@@ -333,7 +427,9 @@
         
         @media (max-width: 768px) { 
             .stats-grid { grid-template-columns: 1fr; }
+            .stats-summary { grid-template-columns: repeat(2, 1fr); }
             .admin-dashboard { padding: 1rem; }
+            .filter-panel { flex-direction: column; align-items: stretch; }
         }
     </style>
 </head>
@@ -462,6 +558,44 @@
             <span><strong>🚨 RED FLAG ALERTS!</strong> Employee comments contain misconduct keywords that require immediate attention.</span>
         </div>
 
+        <!-- Date Range Filter Panel -->
+        <div class="filter-panel">
+            <label><i class="fas fa-calendar-alt"></i> From:</label>
+            <input type="date" id="startDate">
+            <label>To:</label>
+            <input type="date" id="endDate">
+            <button class="filter-btn" onclick="applyDateFilter()">
+                <i class="fas fa-filter"></i> Apply Filter
+            </button>
+            <button class="reset-filter-btn" onclick="resetDateFilter()">
+                <i class="fas fa-undo-alt"></i> Reset
+            </button>
+        </div>
+
+        <!-- Stats Summary Cards -->
+        <div class="stats-summary" id="statsSummary">
+            <div class="stat-summary-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-value" id="totalSubmissions">0</div>
+                <div class="stat-label">Total Submissions</div>
+            </div>
+            <div class="stat-summary-card">
+                <div class="stat-icon">👍</div>
+                <div class="stat-value" id="thumbsUp">0</div>
+                <div class="stat-label">Thumbs Up</div>
+            </div>
+            <div class="stat-summary-card">
+                <div class="stat-icon">👎</div>
+                <div class="stat-value" id="thumbsDown">0</div>
+                <div class="stat-label">Thumbs Down</div>
+            </div>
+            <div class="stat-summary-card">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-value" id="satisfaction">0%</div>
+                <div class="stat-label">Overall Satisfaction</div>
+            </div>
+        </div>
+
         <div id="locationFilter" class="location-filter"></div>
 
         <div class="stats-grid">
@@ -527,6 +661,99 @@
         d.setDate(d.getDate() + 4 - (d.getDay() || 7));
         const yearStart = new Date(d.getFullYear(),0,1);
         return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+    
+    // ==================== FILTER FUNCTION ====================
+    function filterByDateRange(data, startDate, endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        return data.filter(item => {
+            const submissionDate = new Date(item.timestamp);
+            return submissionDate >= start && submissionDate <= end;
+        });
+    }
+    
+    // ==================== SATISFACTION CALCULATION ====================
+    function calculateSatisfaction(data) {
+        const total = data.length;
+        let up = 0;
+        let down = 0;
+
+        data.forEach(item => {
+            if (item.rating === 'good' || item.moodScore >= 7) {
+                up++;
+            } else {
+                down++;
+            }
+        });
+
+        const satisfaction = total === 0 ? 0 : ((up / total) * 100).toFixed(1);
+
+        return {
+            total,
+            up,
+            down,
+            satisfaction
+        };
+    }
+    
+    // ==================== APPLY DATE FILTER ====================
+    let currentFilteredData = null;
+    let isFiltered = false;
+    
+    function applyDateFilter() {
+        const start = document.getElementById("startDate").value;
+        const end = document.getElementById("endDate").value;
+
+        if (!start || !end) {
+            alert("Please select both dates");
+            return;
+        }
+
+        const filteredData = filterByDateRange(feedbackData, start, end);
+        
+        if (filteredData.length === 0) {
+            alert("No data found for the selected date range.");
+            return;
+        }
+        
+        currentFilteredData = filteredData;
+        isFiltered = true;
+        updateDashboardWithStats(currentFilteredData);
+    }
+    
+    function resetDateFilter() {
+        document.getElementById("startDate").value = "";
+        document.getElementById("endDate").value = "";
+        isFiltered = false;
+        currentFilteredData = null;
+        updateDashboardWithStats(feedbackData);
+    }
+    
+    // ==================== UPDATE DASHBOARD WITH STATS ====================
+    function updateDashboardWithStats(data) {
+        const stats = calculateSatisfaction(data);
+        
+        document.getElementById("totalSubmissions").innerText = stats.total;
+        document.getElementById("thumbsUp").innerText = stats.up;
+        document.getElementById("thumbsDown").innerText = stats.down;
+        
+        const satisfactionElement = document.getElementById("satisfaction");
+        satisfactionElement.innerText = stats.satisfaction + "%";
+        
+        // Color code satisfaction
+        satisfactionElement.classList.remove('satisfaction-high', 'satisfaction-medium', 'satisfaction-low');
+        if (stats.satisfaction >= 70) {
+            satisfactionElement.classList.add('satisfaction-high');
+        } else if (stats.satisfaction >= 50) {
+            satisfactionElement.classList.add('satisfaction-medium');
+        } else {
+            satisfactionElement.classList.add('satisfaction-low');
+        }
+        
+        renderDashboard(data);
     }
     
     // ==================== AI SUMMARY ENGINE ====================
@@ -613,15 +840,15 @@
     // ==================== THURSDAY AUTO-GENERATION ====================
     function scheduleThursdayAutoReport() {
         const today = new Date();
-        const day = today.getDay(); // 4 = Thursday
+        const day = today.getDay();
         const reportDate = localStorage.getItem(LAST_REPORT_WEEK_KEY);
         const thisWeek = today.getFullYear() + "-" + getWeekNumber(today);
 
-        if (day === 4) { // Thursday
+        if (day === 4) {
             if (reportDate) {
                 const lastWeek = new Date(reportDate).getFullYear() + "-" + getWeekNumber(new Date(reportDate));
                 if (lastWeek === thisWeek) {
-                    return; // Already generated this week
+                    return;
                 }
             }
             generateWeeklyReport();
@@ -963,16 +1190,19 @@
         try {
             const response = await fetch('/api/feedback');
             feedbackData = await response.json();
-            renderDashboard();
+            updateDashboardWithStats(feedbackData);
             renderWeeklyReport();
             scheduleThursdayAutoReport();
         } catch (error) { console.error('Error loading data:', error); }
     }
     
-    function getFilteredData() { return currentFilter === 'all' ? feedbackData : feedbackData.filter(f => f.location === currentFilter); }
+    function getFilteredData() { 
+        const dataToFilter = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
+        return currentFilter === 'all' ? dataToFilter : dataToFilter.filter(f => f.location === currentFilter);
+    }
     
-    function renderDashboard() {
-        const filtered = getFilteredData();
+    function renderDashboard(data) {
+        const filtered = data || getFilteredData();
         document.getElementById('alertBanner').style.display = filtered.filter(f => f.redFlags?.length > 0).length > 0 ? 'flex' : 'none';
         renderLocationFilters();
         renderDailyMood(filtered);
@@ -983,10 +1213,11 @@
     }
     
     function renderLocationFilters() {
-        const locations = [...new Set(feedbackData.map(f => f.location))];
-        let html = `<div class="filter-chip ${currentFilter === 'all' ? 'active' : ''}" onclick="setFilter('all')">📍 All (${feedbackData.length})</div>`;
+        const dataSource = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
+        const locations = [...new Set(dataSource.map(f => f.location))];
+        let html = `<div class="filter-chip ${currentFilter === 'all' ? 'active' : ''}" onclick="setFilter('all')">📍 All (${dataSource.length})</div>`;
         locations.forEach(loc => {
-            const count = feedbackData.filter(f => f.location === loc).length;
+            const count = dataSource.filter(f => f.location === loc).length;
             html += `<div class="filter-chip ${currentFilter === loc ? 'active' : ''}" onclick="setFilter('${loc}')">📍 ${loc} (${count})</div>`;
         });
         document.getElementById('locationFilter').innerHTML = html;
@@ -996,7 +1227,14 @@
         const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         const dayScores = {};
         weekDays.forEach(day => dayScores[day] = { total: 0, count: 0 });
-        data.forEach(item => { if (item.day && dayScores[item.day]) { dayScores[item.day].total += item.moodScore || 0; dayScores[item.day].count++; } });
+        data.forEach(item => { 
+            const date = new Date(item.timestamp);
+            const dayName = weekDays[date.getDay() === 0 ? 6 : date.getDay() - 1];
+            if (dayName && dayScores[dayName]) {
+                dayScores[dayName].total += item.moodScore || 0;
+                dayScores[dayName].count++;
+            }
+        });
         const container = document.getElementById('dailyMoodContainer');
         if (data.length === 0) { container.innerHTML = '<div class="empty-state">No feedback data yet</div>'; return; }
         let html = '';
@@ -1065,13 +1303,18 @@
         } catch (error) { alert('Failed to delete'); }
     }
     
-    function setFilter(location) { currentFilter = location; renderDashboard(); }
+    function setFilter(location) { 
+        currentFilter = location; 
+        const dataToRender = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
+        renderDashboard(dataToRender);
+    }
     
     function exportToCSV() {
-        const data = getFilteredData();
+        const dataToExport = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
+        const filtered = currentFilter === 'all' ? dataToExport : dataToExport.filter(f => f.location === currentFilter);
         const timestamp = getCurrentTimestamp();
         const headers = ['ID', 'Location', 'Rating', 'Mood Score', 'Comment', 'Issues', 'Red Flags', 'Date & Time'];
-        const rows = data.map(item => [
+        const rows = filtered.map(item => [
             item.id, item.location, item.rating, item.moodScore, 
             item.comment || '', (item.issues || []).join('; '),
             (item.redFlags || []).join('; '),
@@ -1107,6 +1350,8 @@
     window.showResetUserModal = showResetUserModal;
     window.confirmDeleteUser = confirmDeleteUser;
     window.generateWeeklyReport = generateWeeklyReport;
+    window.applyDateFilter = applyDateFilter;
+    window.resetDateFilter = resetDateFilter;
     
     // Initialize
     localStorage.removeItem(SESSION_KEY);
