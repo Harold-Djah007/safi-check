@@ -216,11 +216,11 @@ def insert_test_numbers():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-       test_numbers = [
-    ('+233550157210', 'Ghana Number 1', 'Ghana', True),
-    ('+233506896041', 'Ghana Number 2', 'Ghana', True),
-    ('+15556664486', 'Meta Test Number', 'USA', True),
-]
+        test_numbers = [
+            ('+233550157210', 'Ghana Number 1', 'Ghana', True),
+            ('+233506896041', 'Ghana Number 2', 'Ghana', True),
+            ('+15556664486', 'Meta Test Number', 'USA', True),
+        ]
         
         for number, name, country, active in test_numbers:
             cursor.execute("""
