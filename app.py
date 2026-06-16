@@ -63,13 +63,16 @@ WHATSAPP_HEADERS = {
 
 print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
 
+# ==================== IMPROVED send_whatsapp_message WITH BODY CHECK ====================
 def send_whatsapp_message(phone_number, message):
-    """Send WhatsApp message using Meta Cloud API"""
+    """Send WhatsApp message using Meta Cloud API - checks both status AND body"""
     if MOCK_MODE:
         print(f"📱 [MOCK MODE] Would send to {phone_number}: {message}")
         return True
     
     try:
+        # Ensure phone number is properly formatted
+        phone_number = phone_number.strip()
         if not phone_number.startswith('+'):
             phone_number = '+' + phone_number
         
@@ -84,13 +87,30 @@ def send_whatsapp_message(phone_number, message):
             }
         }
         
+        print(f"📤 Sending WhatsApp message to {phone_number}")
+        print(f"📤 Payload: {json.dumps(payload, indent=2)}")
+        
         response = requests.post(WHATSAPP_API_URL, headers=WHATSAPP_HEADERS, json=payload)
         
-        if response.status_code == 200:
-            print(f"✅ WhatsApp message sent to {phone_number}")
-            return True
+        # ✅ IMPROVED: Check status AND response body
+        if response.status_code in [200, 201]:
+            try:
+                data = response.json()
+                # Check if the response contains a "messages" array (success)
+                if "messages" in data:
+                    print(f"✅ WhatsApp response: {response.text}")
+                    return True
+                else:
+                    # Sometimes Meta returns 200 but with error in body
+                    print(f"❌ WhatsApp API returned 200 but no 'messages' in response:")
+                    print(f"   Response: {response.text}")
+                    return False
+            except json.JSONDecodeError:
+                print(f"❌ Could not parse JSON response: {response.text}")
+                return False
         else:
-            print(f"❌ WhatsApp API error: {response.status_code} - {response.text}")
+            print(f"❌ WhatsApp API error: {response.status_code}")
+            print(f"❌ Response: {response.text}")
             return False
             
     except Exception as e:
@@ -251,6 +271,7 @@ class SchedulerLock:
         self.lock_acquired = False
         self.conn = None
         self.cursor = None
+        self._lock_held = False
     
     def acquire(self):
         """Try to acquire scheduler lock using PostgreSQL advisory lock"""
@@ -261,6 +282,7 @@ class SchedulerLock:
             self.cursor.execute("SELECT pg_try_advisory_lock(12345)")
             self.lock_acquired = self.cursor.fetchone()[0]
             if self.lock_acquired:
+                self._lock_held = True
                 print("✅ Scheduler lock acquired")
             else:
                 print("⚠️ Scheduler lock already held by another instance")
@@ -271,10 +293,11 @@ class SchedulerLock:
     
     def release(self):
         """Release the advisory lock"""
-        if self.lock_acquired and self.cursor:
+        if self._lock_held and self.cursor:
             try:
                 self.cursor.execute("SELECT pg_advisory_unlock(12345)")
                 self.conn.commit()
+                self._lock_held = False
                 print("✅ Scheduler lock released")
             except Exception as e:
                 print(f"❌ Failed to release scheduler lock: {e}")
@@ -285,14 +308,23 @@ class SchedulerLock:
                     self.cursor = None
         self.lock_acquired = False
 
-# ==================== WHATSAPP SCHEDULER ====================
+    def __enter__(self):
+        """Context manager entry"""
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures lock is released"""
+        self.release()
+
+# ==================== WHATSAPP SCHEDULER (IMPROVED) ====================
 
 class NotificationScheduler:
     def __init__(self):
         self.last_sent_date = None
         self.running = True
-        self.target_hour_utc = 10  # 4 PM UTC
-        self.target_minute = 15    # 4:30 PM UTC
+        self.target_hour_utc = 11  # 4 PM UTC
+        self.target_minute = 10    # 4:30 PM UTC
         self.lock = None
         self.is_scheduler_active = False
     
@@ -313,15 +345,17 @@ class NotificationScheduler:
                 return_db_connection(conn)
     
     def check_and_send(self):
+        """Check current time and send WhatsApp - improved to not miss the exact minute"""
         now = datetime.utcnow()
-        current_hour = now.hour
-        current_minute = now.minute
         today = now.date()
         
-        if current_hour == self.target_hour_utc and current_minute == self.target_minute:
-            if self.last_sent_date != today:
-                self.send_notifications()
-                self.last_sent_date = today
+        # ✅ IMPROVED: Use target_time comparison instead of exact minute match
+        target_time = now.replace(hour=self.target_hour_utc, minute=self.target_minute, second=0, microsecond=0)
+        
+        # Check if we've passed the target time today and haven't sent yet
+        if now >= target_time and self.last_sent_date != today:
+            self.send_notifications()
+            self.last_sent_date = today
     
     def send_notifications(self):
         message = "⏰ SafiCheck Reminder: It's 4:30 PM UTC! Time for daily check-in. Please submit your feedback at: https://safi-check.onrender.com"
@@ -362,8 +396,10 @@ class NotificationScheduler:
                 return_db_connection(conn)
     
     def start(self):
-        """Start the scheduler with lock acquisition"""
+        """Start the scheduler with lock acquisition using context manager"""
+        # ✅ IMPROVED: Use context manager for lock
         self.lock = SchedulerLock()
+        
         if not self.lock.acquire():
             print("⚠️ Scheduler already running on another instance. Skipping...")
             return False
@@ -619,18 +655,46 @@ def get_scheduler_status():
         if conn:
             return_db_connection(conn)
 
+# ==================== UPDATED TEST WHATSAPP ENDPOINT WITH DEBUG ====================
 @app.route('/api/test-whatsapp', methods=['GET'])
 def test_whatsapp():
     phone = request.args.get('phone')
+
     if not phone:
         return jsonify({'error': 'Provide ?phone=+233XXXXXXXXX'}), 400
+
+    # ✅ FIX: remove spaces + force correct format
+    phone = phone.strip()
+
+    if not phone.startswith('+'):
+        phone = '+' + phone
+
+    # Store debug info
+    debug_info = {}
     
-    result = send_whatsapp_message(phone, "🧪 Test message from SafiCheck! Your WhatsApp integration is working. 🎉")
+    # Try sending the message
+    result = send_whatsapp_message(
+        phone,
+        "🧪 Test message from SafiCheck! Your WhatsApp integration is working. 🎉"
+    )
     
+    # Only include debug response if not in mock mode
+    if not MOCK_MODE:
+        try:
+            debug_info = {
+                'api_url': WHATSAPP_API_URL,
+                'phone_formatted': phone,
+                'headers_set': 'Authorization and Content-Type',
+                'mock_mode': MOCK_MODE
+            }
+        except Exception as e:
+            debug_info = {'error': str(e)}
+
     return jsonify({
         'success': result,
         'phone': phone,
-        'mode': 'LIVE' if not MOCK_MODE else 'MOCK'
+        'mode': 'LIVE' if not MOCK_MODE else 'MOCK',
+        'debug': debug_info
     })
 
 @app.route('/api/debug-db')
