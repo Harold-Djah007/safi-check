@@ -141,15 +141,14 @@ def insert_test_numbers():
         cursor = conn.cursor()
         
         # Your actual phone numbers (converted to international format)
-        # Ghana numbers: Add +233 and remove the leading 0
         # 0550157210 → +233550157210
         # 0506896041 → +233506896041
-        # Test number from Meta: +1 555 664 4486
+        # Meta test number: +1 555 664 4486 → +15556664486
         
         test_numbers = [
             ('+233550157210', 'Ghana Number 1', 'Ghana', 1),
             ('+233506896041', 'Ghana Number 2', 'Ghana', 1),
-            ('+15556644486', 'Meta Test Number', 'USA', 1),  # Meta's test number
+            ('+15556664486', 'Meta Test Number', 'USA', 1),
         ]
         
         for number, name, country, active in test_numbers:
@@ -161,11 +160,13 @@ def insert_test_numbers():
         conn.commit()
         conn.close()
         print(f"✅ Seeded {len(test_numbers)} test number(s) to notification_numbers table")
-        print(f"   Numbers: {', '.join([n[0] for n in test_numbers])}")
+        for num in test_numbers:
+            print(f"   📱 Added: {num[1]} - {num[0]}")
         return True
     except Exception as e:
         print(f"❌ Failed to seed database: {e}")
         return False
+
 # Initialize database and seed test numbers
 init_db()
 insert_test_numbers()
@@ -176,8 +177,8 @@ class NotificationScheduler:
     def __init__(self):
         self.last_sent_date = None
         self.running = True
-        self.target_hour_utc = 16  # 4:00 PM UTC
-        self.target_minute = 0 
+        self.target_hour_utc = 16  # 4 PM UTC
+        self.target_minute = 30    # 30 minutes (4:30 PM UTC)
     
     def get_active_numbers(self):
         """Get phone numbers from database"""
@@ -193,7 +194,7 @@ class NotificationScheduler:
             return []
     
     def check_and_send(self):
-        """Check current time and send WhatsApp if it's 4:00 PM UTC"""
+        """Check current time and send WhatsApp if it's 4:30 PM UTC"""
         now = datetime.utcnow()
         current_hour = now.hour
         current_minute = now.minute
@@ -206,7 +207,7 @@ class NotificationScheduler:
     
     def send_notifications(self):
         """Send WhatsApp notifications to all active numbers"""
-        message = "⏰ SafiCheck Reminder: It's 4:00 PM UTC! Time for daily check-in. Please submit your feedback at: https://safi-check.onrender.com"
+        message = "⏰ SafiCheck Reminder: It's 4:30 PM UTC! Time for daily check-in. Please submit your feedback at: https://safi-check.onrender.com"
         
         recipients = self.get_active_numbers()
         
@@ -510,8 +511,8 @@ def add_notification_number():
 def get_scheduler_status():
     """Get scheduler status"""
     now = datetime.utcnow()
-    next_run = datetime(now.year, now.month, now.day, 16, 0, 0)
-    if now.hour >= 16:
+    next_run = datetime(now.year, now.month, now.day, 16, 30, 0)
+    if now.hour >= 16 and now.minute >= 30:
         next_run = next_run.replace(day=next_run.day + 1)
     
     conn = sqlite3.connect('safi_check.db')
@@ -523,6 +524,7 @@ def get_scheduler_status():
     return jsonify({
         'scheduler_running': True,
         'target_hour_utc': 16,
+        'target_minute_utc': 30,
         'next_run_utc': next_run.isoformat(),
         'active_recipients': active_count,
         'mode': 'MOCK' if MOCK_MODE else 'LIVE',
@@ -542,6 +544,39 @@ def test_whatsapp():
         'success': result,
         'phone': phone,
         'mode': 'LIVE' if not MOCK_MODE else 'MOCK'
+    })
+
+# ==================== DEBUG DATABASE ENDPOINT ====================
+@app.route('/api/debug-db')
+def debug_db():
+    """Debug endpoint to check database contents"""
+    conn = sqlite3.connect('safi_check.db')
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM checkins")
+    count = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT id, submission_date, location
+        FROM checkins
+        ORDER BY submission_date ASC
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    # Convert rows to readable format
+    records = []
+    for row in rows:
+        records.append({
+            'id': row[0],
+            'submission_date': row[1],
+            'location': row[2]
+        })
+
+    return jsonify({
+        "total_records": count,
+        "records": records
     })
 
 # ==================== USER AUTHENTICATION API ====================
@@ -640,6 +675,6 @@ if __name__ == '__main__':
     print("👤 Admin Login: admin / admin123")
     print("=" * 60)
     print(f"📱 WhatsApp Mode: {'MOCK (test mode)' if MOCK_MODE else 'LIVE'}")
-    print(f"⏰ Scheduler: Daily at 16:00 UTC")
+    print(f"⏰ Scheduler: Daily at 16:30 UTC")
     print("=" * 60)
     app.run(debug=True, port=5000)
