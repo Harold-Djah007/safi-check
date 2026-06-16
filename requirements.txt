@@ -3,3 +3,4 @@ gunicorn
 flask-cors
 requests
 pywa
+psycopg2-binary
