@@ -291,8 +291,8 @@ class NotificationScheduler:
     def __init__(self):
         self.last_sent_date = None
         self.running = True
-        self.target_hour_utc = 16  # 4 PM UTC
-        self.target_minute = 30    # 4:30 PM UTC
+        self.target_hour_utc = 10  # 4 PM UTC
+        self.target_minute = 15    # 4:30 PM UTC
         self.lock = None
         self.is_scheduler_active = False
     
