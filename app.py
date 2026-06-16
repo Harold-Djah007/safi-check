@@ -55,7 +55,7 @@ if not MOCK_MODE:
         print("⚠️ WARNING: PHONE_NUMBER_ID not set! Falling back to MOCK_MODE")
         MOCK_MODE = True
 
-WHATSAPP_API_URL = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+WHATSAPP_API_URL = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
 WHATSAPP_HEADERS = {
     "Authorization": f"Bearer {WHATSAPP_TOKEN}",
     "Content-Type": "application/json"
