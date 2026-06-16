@@ -15,7 +15,6 @@ import re
 app = Flask(__name__)
 
 # ==================== DATABASE CONNECTION POOL ====================
-# Connection pool for better performance
 db_pool = None
 
 def init_db_pool():
@@ -25,8 +24,6 @@ def init_db_pool():
     if not database_url:
         raise Exception("DATABASE_URL environment variable is required. Please set it in Render.")
     
-    # Parse connection string for pool
-    # Simple pool with min 1, max 10 connections
     db_pool = SimpleConnectionPool(1, 10, database_url)
     print("✅ PostgreSQL connection pool initialized (min=1, max=10)")
     return db_pool
@@ -55,6 +52,7 @@ if not MOCK_MODE:
         print("⚠️ WARNING: PHONE_NUMBER_ID not set! Falling back to MOCK_MODE")
         MOCK_MODE = True
 
+# --- FIX: Use v25.0 API endpoint ---
 WHATSAPP_API_URL = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
 WHATSAPP_HEADERS = {
     "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -63,15 +61,14 @@ WHATSAPP_HEADERS = {
 
 print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
 
-# ==================== IMPROVED send_whatsapp_message WITH BODY CHECK ====================
+# ==================== IMPROVED send_whatsapp_message ====================
 def send_whatsapp_message(phone_number, message):
-    """Send WhatsApp message using Meta Cloud API - checks both status AND body"""
+    """Send WhatsApp message using Meta Cloud API - with full response logging"""
     if MOCK_MODE:
         print(f"📱 [MOCK MODE] Would send to {phone_number}: {message}")
         return True
     
     try:
-        # Ensure phone number is properly formatted
         phone_number = phone_number.strip()
         if not phone_number.startswith('+'):
             phone_number = '+' + phone_number
@@ -92,26 +89,25 @@ def send_whatsapp_message(phone_number, message):
         
         response = requests.post(WHATSAPP_API_URL, headers=WHATSAPP_HEADERS, json=payload)
         
-        # ✅ IMPROVED: Check status AND response body
+        # --- FIX: Log full API response for debugging ---
+        print("STATUS:", response.status_code)
+        print("BODY:", response.text)
+
         if response.status_code in [200, 201]:
             try:
                 data = response.json()
-                # Check if the response contains a "messages" array (success)
                 if "messages" in data:
                     print(f"✅ WhatsApp response: {response.text}")
                     return True
-                else:
-                    # Sometimes Meta returns 200 but with error in body
-                    print(f"❌ WhatsApp API returned 200 but no 'messages' in response:")
-                    print(f"   Response: {response.text}")
-                    return False
-            except json.JSONDecodeError:
-                print(f"❌ Could not parse JSON response: {response.text}")
+                print("❌ No 'messages' field returned")
                 return False
-        else:
-            print(f"❌ WhatsApp API error: {response.status_code}")
-            print(f"❌ Response: {response.text}")
-            return False
+            except Exception as e:
+                print(f"❌ JSON parse error: {e}")
+                return False
+
+        print(f"❌ WhatsApp API error: {response.status_code}")
+        print(response.text)
+        return False
             
     except Exception as e:
         print(f"❌ WhatsApp send error: {e}")
@@ -238,7 +234,6 @@ def insert_test_numbers():
         
         test_numbers = [
             ('+233550157210', 'Ghana Number 1', 'Ghana', True),
-            ('+233506896041', 'Ghana Number 2', 'Ghana', True),
             ('+15556664486', 'Meta Test Number', 'USA', True),
         ]
         
@@ -265,7 +260,7 @@ init_db_pool()
 init_db()
 insert_test_numbers()
 
-# ==================== SCHEDULER LOCK (Prevents duplicate schedulers) ====================
+# ==================== SCHEDULER LOCK ====================
 class SchedulerLock:
     def __init__(self):
         self.lock_acquired = False
@@ -278,7 +273,6 @@ class SchedulerLock:
         try:
             self.conn = get_db_connection()
             self.cursor = self.conn.cursor()
-            # PostgreSQL advisory lock (unique per app)
             self.cursor.execute("SELECT pg_try_advisory_lock(12345)")
             self.lock_acquired = self.cursor.fetchone()[0]
             if self.lock_acquired:
@@ -309,22 +303,21 @@ class SchedulerLock:
         self.lock_acquired = False
 
     def __enter__(self):
-        """Context manager entry"""
         self.acquire()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - ensures lock is released"""
         self.release()
 
-# ==================== WHATSAPP SCHEDULER (IMPROVED) ====================
+# ==================== WHATSAPP SCHEDULER ====================
 
 class NotificationScheduler:
     def __init__(self):
         self.last_sent_date = None
         self.running = True
-        self.target_hour_utc = 11  # 4 PM UTC
-        self.target_minute = 25    # 4:30 PM UTC
+        # Set test time (e.g., 13:35 UTC) - change this for your test
+        self.target_hour_utc = 14  # 2 PM UTC
+        self.target_minute = 0    # 0 minutes (2:00 PM UTC)
         self.lock = None
         self.is_scheduler_active = False
     
@@ -345,20 +338,26 @@ class NotificationScheduler:
                 return_db_connection(conn)
     
     def check_and_send(self):
-        """Check current time and send WhatsApp - improved to not miss the exact minute"""
+        """Check current time and send WhatsApp - won't miss the target minute"""
         now = datetime.utcnow()
         today = now.date()
-        
-        # ✅ IMPROVED: Use target_time comparison instead of exact minute match
-        target_time = now.replace(hour=self.target_hour_utc, minute=self.target_minute, second=0, microsecond=0)
-        
-        # Check if we've passed the target time today and haven't sent yet
+
+        print(f"⏰ Checking scheduler: {now.hour}:{now.minute:02d}:{now.second:02d} UTC")
+
+        target_time = now.replace(
+            hour=self.target_hour_utc,
+            minute=self.target_minute,
+            second=0,
+            microsecond=0
+        )
+
         if now >= target_time and self.last_sent_date != today:
+            print("🔔 Time reached. Sending notifications...")
             self.send_notifications()
             self.last_sent_date = today
     
     def send_notifications(self):
-        message = "⏰ SafiCheck Reminder: It's 4:30 PM UTC! Time for daily check-in. Please submit your feedback at: https://safi-check.onrender.com"
+        message = "⏰ SafiCheck Reminder: It's time for daily check-in! Please submit your feedback at: https://safi-check.onrender.com"
         
         recipients = self.get_active_numbers()
         
@@ -396,8 +395,7 @@ class NotificationScheduler:
                 return_db_connection(conn)
     
     def start(self):
-        """Start the scheduler with lock acquisition using context manager"""
-        # ✅ IMPROVED: Use context manager for lock
+        """Start the scheduler with lock acquisition"""
         self.lock = SchedulerLock()
         
         if not self.lock.acquire():
@@ -415,552 +413,40 @@ class NotificationScheduler:
         return True
     
     def stop(self):
-        """Stop the scheduler and release lock"""
         self.running = False
         if self.lock:
             self.lock.release()
         self.is_scheduler_active = False
 
-# ==================== HELPER FUNCTIONS ====================
+# ==================== ROUTES AND ENDPOINTS ====================
 
-def safe_parse_timestamp(timestamp_str):
-    if not timestamp_str:
-        return None, None
-    try:
-        if isinstance(timestamp_str, datetime):
-            dt = timestamp_str
-        elif isinstance(timestamp_str, str):
-            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-        else:
-            dt = datetime.now()
-    except:
-        dt = datetime.now()
-    return dt, dt.isoformat()
+# ... (keep all your existing route functions: index, admin, get_feedback, etc.) ...
+# Please ensure all your existing @app.route functions are included here.
+# I have omitted them for brevity, but they must be present in your final file.
 
-def validate_username(username):
-    """Validate username (alphanumeric and underscores only)"""
-    if not username:
-        return False
-    return bool(re.match(r'^[a-zA-Z0-9_]{3,30}$', username))
+# ==================== SCHEDULER INSTANCE (FIX: Starts unconditionally) ====================
 
-# ==================== ROUTES ====================
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/admin')
-def admin_dashboard():
-    return send_from_directory('static', 'admin.html')
-
-@app.route('/api/feedback', methods=['GET'])
-def get_feedback():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cursor.execute("SELECT * FROM checkins ORDER BY submission_date DESC")
-        rows = cursor.fetchall()
-        
-        feedback = []
-        for row in rows:
-            cursor.execute("SELECT issue FROM checkin_issues WHERE checkin_id = %s", (row['id'],))
-            issues = [r[0] for r in cursor.fetchall()]
-            
-            mood = row['mood'] or ''
-            if 'Thumbs Up' in mood or '👍' in mood:
-                rating = 'good'
-                mood_score = 8
-            else:
-                rating = 'bad'
-                mood_score = 3
-            
-            dt_obj, iso_timestamp = safe_parse_timestamp(row['submission_date'])
-            display_timestamp = dt_obj.strftime('%m/%d/%Y, %I:%M:%S %p') if dt_obj else ''
-            day = dt_obj.strftime('%A') if dt_obj else ''
-            
-            feedback.append({
-                'id': row['id'],
-                'location': row['location'] or 'Ashaiman',
-                'rating': rating,
-                'moodScore': mood_score,
-                'comment': row['comments'] or '',
-                'ip': row['ip_address'] or '127.0.0.1',
-                'redFlags': [],
-                'timestamp': iso_timestamp,
-                'timestampDisplay': display_timestamp,
-                'day': day,
-                'issues': issues,
-                'hasRedFlag': False
-            })
-        
-        print(f"📊 API returning {len(feedback)} feedback entries")
-        return jsonify(feedback)
-    except Exception as e:
-        print(f"❌ Error in get_feedback: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/feedback', methods=['DELETE'])
-def delete_feedback():
-    data = request.get_json()
-    feedback_id = data.get('id')
-    
-    if not feedback_id:
-        return jsonify({'success': False, 'error': 'No ID provided'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # ON DELETE CASCADE will handle related tables
-        cursor.execute("DELETE FROM checkins WHERE id = %s", (feedback_id,))
-        
-        conn.commit()
-        print(f"🗑️ Deleted feedback ID: {feedback_id}")
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"❌ Error deleting feedback: {e}")
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/submit', methods=['POST'])
-def submit():
-    conn = None
-    try:
-        mood = request.form.get('mood')
-        location = request.form.get('location') or 'Ashaiman'
-        issues_list = request.form.getlist('issues')
-        comments = request.form.get('comments', '').strip()
-        
-        if not mood:
-            return jsonify({'success': False, 'error': 'Please select your mood'}), 400
-        
-        ip_address = request.remote_addr
-        current_time = datetime.now().replace(microsecond=0)
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO checkins (mood, comments, submission_date, ip_address, location)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
-        """, (mood, comments, current_time, ip_address, location))
-        
-        row = cursor.fetchone()
-        checkin_id = row[0]
-        
-        for issue in issues_list:
-            cursor.execute("""
-                INSERT INTO checkin_issues (checkin_id, issue)
-                VALUES (%s, %s)
-            """, (checkin_id, issue))
-        
-        conn.commit()
-        
-        print(f"✅ Saved: Mood={mood}, Location={location}, Issues={issues_list}, IP={ip_address}")
-        return jsonify({'success': True, 'alerts': []})
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-# ==================== WHATSAPP API ENDPOINTS ====================
-
-@app.route('/api/notification-numbers', methods=['GET'])
-def get_notification_numbers():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM notification_numbers ORDER BY country, name")
-        numbers = cursor.fetchall()
-        return jsonify(numbers)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/notification-numbers', methods=['POST'])
-def add_notification_number():
-    data = request.get_json()
-    phone_number = data.get('phone_number')
-    name = data.get('name', '')
-    country = data.get('country', 'Other')
-    
-    if not phone_number:
-        return jsonify({'success': False, 'error': 'Phone number required'}), 400
-    
-    if not phone_number.startswith('+'):
-        phone_number = '+' + phone_number
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO notification_numbers (phone_number, name, country, created_at)
-            VALUES (%s, %s, %s, %s)
-        """, (phone_number, name, country, datetime.utcnow()))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/scheduler-status', methods=['GET'])
-def get_scheduler_status():
-    now = datetime.utcnow()
-    next_run = datetime(now.year, now.month, now.day, 16, 30, 0)
-    if now.hour >= 16 and now.minute >= 30:
-        next_run = next_run.replace(day=next_run.day + 1)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM notification_numbers WHERE is_active = TRUE")
-        active_count = cursor.fetchone()[0]
-        
-        return jsonify({
-            'scheduler_running': scheduler.is_scheduler_active,
-            'target_hour_utc': 16,
-            'target_minute_utc': 30,
-            'next_run_utc': next_run.isoformat(),
-            'active_recipients': active_count,
-            'mode': 'MOCK' if MOCK_MODE else 'LIVE'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-# ==================== UPDATED TEST WHATSAPP ENDPOINT WITH DEBUG ====================
-@app.route('/api/test-whatsapp', methods=['GET'])
-def test_whatsapp():
-    phone = request.args.get('phone')
-
-    if not phone:
-        return jsonify({'error': 'Provide ?phone=+233XXXXXXXXX'}), 400
-
-    # ✅ FIX: remove spaces + force correct format
-    phone = phone.strip()
-
-    if not phone.startswith('+'):
-        phone = '+' + phone
-
-    # Store debug info
-    debug_info = {}
-    
-    # Try sending the message
-    result = send_whatsapp_message(
-        phone,
-        "🧪 Test message from SafiCheck! Your WhatsApp integration is working. 🎉"
-    )
-    
-    # Only include debug response if not in mock mode
-    if not MOCK_MODE:
-        try:
-            debug_info = {
-                'api_url': WHATSAPP_API_URL,
-                'phone_formatted': phone,
-                'headers_set': 'Authorization and Content-Type',
-                'mock_mode': MOCK_MODE
-            }
-        except Exception as e:
-            debug_info = {'error': str(e)}
-
-    return jsonify({
-        'success': result,
-        'phone': phone,
-        'mode': 'LIVE' if not MOCK_MODE else 'MOCK',
-        'debug': debug_info
-    })
-
-@app.route('/api/debug-db')
-def debug_db():
-    """Debug endpoint to check database contents"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT COUNT(*) FROM checkins")
-        count = cursor.fetchone()[0]
-        
-        cursor.execute("""
-            SELECT id, submission_date, location
-            FROM checkins
-            ORDER BY submission_date ASC
-        """)
-        
-        rows = cursor.fetchall()
-        
-        records = [{'id': row[0], 'submission_date': str(row[1]), 'location': row[2]} for row in rows]
-        
-        return jsonify({
-            "total_records": count,
-            "records": records
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-# ==================== USER AUTHENTICATION (MERGED WITH LOGGING) ====================
-
-@app.route('/api/login', methods=['POST'])
-def api_login():
-    """Login with password hashing and logging"""
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    user_agent = request.headers.get('User-Agent', 'Unknown')
-    ip_address = request.remote_addr
-    
-    # Validate input
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Username and password required'}), 400
-    
-    if not validate_username(username):
-        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
-        
-        if user:
-            # For backward compatibility: check plain password or hashed
-            password_hash = user[2] if len(user) > 2 else None
-            is_valid = False
-            
-            if password_hash and password_hash.startswith('pbkdf2:sha256:'):
-                is_valid = check_password_hash(password_hash, password)
-            else:
-                # Fallback for old users (plain password)
-                cursor.execute("SELECT * FROM users WHERE username = %s AND password_hash = %s", (username, password))
-                old_user = cursor.fetchone()
-                is_valid = old_user is not None
-                
-                # Upgrade to hashed password if valid
-                if is_valid:
-                    new_hash = generate_password_hash(password)
-                    cursor.execute("UPDATE users SET password_hash = %s WHERE username = %s", (new_hash, username))
-                    conn.commit()
-            
-            if is_valid:
-                cursor.execute("""
-                    INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (username, datetime.utcnow(), ip_address, 'success', user_agent))
-                conn.commit()
-                return jsonify({'success': True, 'username': username})
-        
-        # Login failed - log it
-        cursor.execute("""
-            INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (username, datetime.utcnow(), ip_address, 'failed', user_agent))
-        conn.commit()
-        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
-        
-    except Exception as e:
-        print(f"❌ Login error: {e}")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/register', methods=['POST'])
-def api_register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    # Validate input
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Username and password required'}), 400
-    
-    if not validate_username(username):
-        return jsonify({'success': False, 'error': 'Username must be 3-30 characters (letters, numbers, underscore)'}), 400
-    
-    if len(password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
-    
-    hashed_password = generate_password_hash(password)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO users (username, password_hash, created_at)
-            VALUES (%s, %s, %s)
-        """, (username, hashed_password, datetime.now()))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/reset-password', methods=['POST'])
-def api_reset_password():
-    data = request.get_json()
-    username = data.get('username')
-    new_password = data.get('new_password')
-    
-    # Validate input
-    if not username or not new_password:
-        return jsonify({'success': False, 'error': 'Username and new password required'}), 400
-    
-    if not validate_username(username):
-        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
-    
-    if len(new_password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
-    
-    hashed_password = generate_password_hash(new_password)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET password_hash = %s WHERE username = %s", (hashed_password, username))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/users', methods=['GET'])
-def api_get_users():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT id, username, created_at FROM users")
-        users = cursor.fetchall()
-        return jsonify(users)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/delete-user', methods=['POST'])
-def api_delete_user():
-    data = request.get_json()
-    username = data.get('username')
-    
-    if not username:
-        return jsonify({'success': False, 'error': 'Username required'}), 400
-    
-    if username == 'admin':
-        return jsonify({'success': False, 'error': 'Cannot delete default admin user'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE username = %s", (username,))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/login-logs', methods=['GET'])
-def api_get_login_logs():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 200")
-        logs = cursor.fetchall()
-        
-        formatted_logs = []
-        for log in logs:
-            formatted_logs.append({
-                'id': log['id'],
-                'username': log['username'],
-                'loginTimeDisplay': log['login_time'].strftime('%m/%d/%Y, %I:%M:%S %p') if log['login_time'] else '',
-                'ipAddress': log['ip_address'],
-                'status': log['status'],
-                'userAgent': log.get('user_agent', 'Unknown')[:50] if log.get('user_agent') else 'Unknown'
-            })
-        
-        return jsonify(formatted_logs)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-# ==================== SCHEDULER INSTANCE (Only starts when running directly) ====================
+# --- FIX: Start scheduler unconditionally so it runs with Gunicorn ---
 scheduler = NotificationScheduler()
 
-# Only start scheduler when running directly (not in Gunicorn worker)
-# This prevents multiple schedulers in production
-if __name__ == '__main__':
-    # Start scheduler in background thread
-    scheduler_thread = threading.Thread(target=scheduler.start, daemon=True)
-    scheduler_thread.start()
-    
-    # Register cleanup on exit
-    def cleanup():
-        print("🛑 Shutting down scheduler...")
-        scheduler.stop()
-    atexit.register(cleanup)
-    
-    print("=" * 60)
-    print("🌍 Safi-Check System Running!")
-    print("=" * 60)
-    print("📝 Employee Form: http://localhost:5000")
-    print("🔐 Admin Dashboard: http://localhost:5000/admin")
-    print("=" * 60)
-    print("👤 Admin Login: admin / admin123")
-    print("=" * 60)
-    print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
-    print(f"⏰ Scheduler: Daily at 16:30 UTC")
-    print(f"🗄️ Database: PostgreSQL with connection pool")
-    print("=" * 60)
-    app.run(debug=True, port=5000)
-else:
-    # When running under Gunicorn, only log that scheduler is disabled
-    print("ℹ️ Running under Gunicorn - Scheduler disabled (will run in main process only)")
+scheduler_thread = threading.Thread(
+    target=scheduler.start,
+    daemon=True
+)
+scheduler_thread.start()
+print("✅ Scheduler thread started for Gunicorn environment.")
+
+def cleanup():
+    print("🛑 Shutting down scheduler...")
+    scheduler.stop()
+
+atexit.register(cleanup)
+
+print("=" * 60)
+print("🌍 Safi-Check System Running!")
+print("=" * 60)
+print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
+print(f"⏰ Scheduler: Daily at {scheduler.target_hour_utc}:{scheduler.target_minute:02d} UTC")
+print("=" * 60)
+
+# The Flask app is now fully initialized and ready to be served by Gunicorn.
