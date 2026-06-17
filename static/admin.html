@@ -11,7 +11,6 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #f0f4f8; font-family: 'Inter', sans-serif; }
         
-        /* Auth Overlay */
         .auth-overlay {
             position: fixed;
             top: 0;
@@ -94,7 +93,6 @@
         .forgot-password a { color: #6c86a3; text-decoration: none; cursor: pointer; }
         .forgot-password a:hover { color: #1b4d2e; text-decoration: underline; }
         
-        /* Admin Dashboard */
         .admin-dashboard { display: none; padding: 2rem; }
         .admin-container { max-width: 1400px; margin: 0 auto; }
         .admin-header {
@@ -121,7 +119,7 @@
             font-weight: 500;
             color: #1b4d2e;
         }
-        .logout-btn, .refresh-btn, .export-btn, .users-btn, .passwords-btn, .report-btn {
+        .logout-btn, .refresh-btn, .export-btn, .users-btn, .passwords-btn {
             padding: 10px 20px;
             border: none;
             border-radius: 40px;
@@ -134,9 +132,7 @@
         .export-btn { background: #1b4d2e; color: white; }
         .users-btn { background: #8b5cf6; color: white; }
         .passwords-btn { background: #f59e0b; color: white; }
-        .report-btn { background: #06b6d4; color: white; }
         
-        /* Stats Grid */
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
         .stat-card {
             background: white;
@@ -152,7 +148,6 @@
         .mood-bar { background: #edf2f7; border-radius: 30px; height: 28px; overflow: hidden; }
         .mood-fill { height: 100%; border-radius: 30px; transition: width 0.3s; }
         
-        /* Filter Panel Styles */
         .filter-panel {
             background: white;
             border-radius: 20px;
@@ -164,10 +159,7 @@
             gap: 1rem;
             border: 1px solid #e2e8f0;
         }
-        .filter-panel label {
-            font-weight: 600;
-            color: #374151;
-        }
+        .filter-panel label { font-weight: 600; color: #374151; }
         .filter-panel input[type="date"] {
             padding: 10px 14px;
             border: 2px solid #e2e8f0;
@@ -175,10 +167,7 @@
             font-family: 'Inter', sans-serif;
             font-size: 14px;
         }
-        .filter-panel input[type="date"]:focus {
-            outline: none;
-            border-color: #2d6a4f;
-        }
+        .filter-panel input[type="date"]:focus { outline: none; border-color: #2d6a4f; }
         .filter-btn {
             background: #2d6a4f;
             color: white;
@@ -188,9 +177,7 @@
             cursor: pointer;
             font-weight: 600;
         }
-        .filter-btn:hover {
-            background: #1b4d2e;
-        }
+        .filter-btn:hover { background: #1b4d2e; }
         .reset-filter-btn {
             background: #6c86a3;
             color: white;
@@ -200,11 +187,8 @@
             cursor: pointer;
             font-weight: 600;
         }
-        .reset-filter-btn:hover {
-            background: #4a627a;
-        }
+        .reset-filter-btn:hover { background: #4a627a; }
         
-        /* Stats Summary */
         .stats-summary {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -219,34 +203,14 @@
             border: 1px solid #e2e8f0;
             transition: transform 0.2s;
         }
-        .stat-summary-card:hover {
-            transform: translateY(-2px);
-        }
-        .stat-summary-card .stat-icon {
-            font-size: 2rem;
-            margin-bottom: 8px;
-        }
-        .stat-summary-card .stat-value {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #1f2937;
-        }
-        .stat-summary-card .stat-label {
-            font-size: 0.8rem;
-            color: #6c86a3;
-            margin-top: 4px;
-        }
-        .satisfaction-high {
-            color: #2b7a4b;
-        }
-        .satisfaction-medium {
-            color: #e68a2e;
-        }
-        .satisfaction-low {
-            color: #c23b22;
-        }
+        .stat-summary-card:hover { transform: translateY(-2px); }
+        .stat-summary-card .stat-icon { font-size: 2rem; margin-bottom: 8px; }
+        .stat-summary-card .stat-value { font-size: 1.8rem; font-weight: 700; color: #1f2937; }
+        .stat-summary-card .stat-label { font-size: 0.8rem; color: #6c86a3; margin-top: 4px; }
+        .satisfaction-high { color: #2b7a4b; }
+        .satisfaction-medium { color: #e68a2e; }
+        .satisfaction-low { color: #c23b22; }
         
-        /* Enhanced Location Filter Styles */
         .location-filter-container {
             background: white;
             border-radius: 20px;
@@ -262,11 +226,7 @@
             font-weight: 600;
             color: #1f4d2e;
         }
-        .location-filter {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+        .location-filter { display: flex; gap: 10px; flex-wrap: wrap; }
         .filter-chip {
             background: #f1f5f9;
             padding: 8px 20px;
@@ -278,25 +238,11 @@
             align-items: center;
             gap: 8px;
         }
-        .filter-chip i {
-            font-size: 0.8rem;
-        }
-        .filter-chip.active { 
-            background: #2d6a4f; 
-            color: white; 
-        }
-        .filter-chip.active i {
-            color: white;
-        }
-        .filter-chip:hover { 
-            background: #cbd5e1; 
-        }
-        .no-data-message {
-            text-align: center;
-            padding: 20px;
-            color: #94a3b8;
-            font-style: italic;
-        }
+        .filter-chip i { font-size: 0.8rem; }
+        .filter-chip.active { background: #2d6a4f; color: white; }
+        .filter-chip.active i { color: white; }
+        .filter-chip:hover { background: #cbd5e1; }
+        .no-data-message { text-align: center; padding: 20px; color: #94a3b8; font-style: italic; }
         
         .alert-banner {
             background: #dc2626;
@@ -311,7 +257,60 @@
         }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
         
-        /* Weekly Report Styles */
+        .feedback-log {
+            background: white;
+            border-radius: 28px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        .feedback-item {
+            border-left: 4px solid #cbd5e1;
+            padding: 16px;
+            margin-bottom: 12px;
+            background: #f8fafc;
+            border-radius: 16px;
+        }
+        .feedback-item.red-flag { border-left-color: #dc2626; background: #fef2f2; }
+        .red-flag-tag {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #dc2626;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: 10px;
+            transition: transform 0.2s;
+        }
+        .delete-btn:hover {
+            transform: scale(1.2);
+        }
+        .delete-all-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 10px;
+            transition: background 0.2s;
+        }
+        .delete-all-btn:hover {
+            background: #b91c1c;
+        }
+        .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
+        canvas { max-height: 200px; }
+        .trend-stats { text-align: center; margin-top: 12px; font-size: 0.85rem; color: #4a627a; }
+        
         .weekly-report {
             background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
             border-left: 4px solid #06b6d4;
@@ -326,12 +325,7 @@
             white-space: pre-wrap;
             margin-bottom: 12px;
         }
-        .report-content pre {
-            background: none;
-            padding: 0;
-            margin: 0;
-            font-family: monospace;
-        }
+        .report-content pre { background: none; padding: 0; margin: 0; font-family: monospace; }
         .generate-report-btn {
             background: #06b6d4;
             color: white;
@@ -342,9 +336,7 @@
             font-weight: 600;
             margin-top: 10px;
         }
-        .generate-report-btn:hover {
-            background: #0891b2;
-        }
+        .generate-report-btn:hover { background: #0891b2; }
         
         /* Recent Activity Section */
         .recent-activity {
@@ -354,8 +346,15 @@
             margin-top: 1.5rem;
             border: 1px solid #e2e8f0;
         }
-        .recent-activity h3 {
+        .recent-activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .recent-activity-header h3 {
             color: #1f4d2e;
             display: flex;
             align-items: center;
@@ -364,21 +363,29 @@
         .recent-item {
             padding: 12px;
             border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .recent-item:last-child {
             border-bottom: none;
+        }
+        .recent-content {
+            flex: 1;
         }
         .recent-header {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
+            flex-wrap: wrap;
         }
         .recent-comment {
             font-size: 0.85rem;
             color: #4b5563;
         }
         
-        /* Modal Styles */
         .modal {
             display: none;
             position: fixed;
@@ -395,10 +402,11 @@
             background: white;
             border-radius: 32px;
             padding: 30px;
-            max-width: 1000px;
+            max-width: 500px;
             width: 90%;
             max-height: 85vh;
             overflow-y: auto;
+            text-align: center;
         }
         .modal-header {
             display: flex;
@@ -408,13 +416,35 @@
             padding-bottom: 15px;
             border-bottom: 2px solid #e2e8f0;
         }
-        .close-modal {
-            background: none;
-            border: none;
-            font-size: 28px;
-            cursor: pointer;
-            color: #6c86a3;
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 20px;
         }
+        .modal-actions button {
+            padding: 10px 30px;
+            border: none;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .modal-confirm {
+            background: #dc2626;
+            color: white;
+        }
+        .modal-confirm:hover {
+            background: #b91c1c;
+        }
+        .modal-cancel {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        .modal-cancel:hover {
+            background: #d1d5db;
+        }
+        
         .user-table, .password-table {
             width: 100%;
             border-collapse: collapse;
@@ -424,10 +454,7 @@
             text-align: left;
             border-bottom: 1px solid #e2e8f0;
         }
-        .user-table th, .password-table th {
-            background: #f1f5f9;
-            font-weight: 600;
-        }
+        .user-table th, .password-table th { background: #f1f5f9; font-weight: 600; }
         .reset-btn {
             background: #f59e0b;
             color: white;
@@ -467,6 +494,7 @@
             .stats-summary { grid-template-columns: repeat(2, 1fr); }
             .admin-dashboard { padding: 1rem; }
             .filter-panel { flex-direction: column; align-items: stretch; }
+            .recent-activity-header { flex-direction: column; align-items: stretch; }
         }
     </style>
 </head>
@@ -474,7 +502,6 @@
 
 <!-- AUTHENTICATION OVERLAY -->
 <div id="authOverlay" class="auth-overlay" style="display: flex;">
-    <!-- Login View -->
     <div id="loginView" class="auth-card" style="display: block;">
         <div class="auth-icon"><i class="fas fa-chart-line"></i></div>
         <h2>Safi-Check</h2>
@@ -494,7 +521,6 @@
         <div id="loginError" class="error-msg"></div>
     </div>
 
-    <!-- Sign Up View -->
     <div id="signupView" class="auth-card" style="display: none;">
         <div class="auth-icon"><i class="fas fa-user-plus"></i></div>
         <h2>Create Account</h2>
@@ -512,7 +538,6 @@
         <div id="signupSuccess" class="success-msg"></div>
     </div>
 
-    <!-- Forgot Password View -->
     <div id="forgotPasswordView" class="auth-card" style="display: none;">
         <div class="auth-icon"><i class="fas fa-key"></i></div>
         <h2>Reset Password</h2>
@@ -568,6 +593,21 @@
         </div>
         <div class="warning-text">
             <i class="fas fa-exclamation-triangle"></i> Warning: Deleting a user is permanent and cannot be undone.
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i> Confirm Delete</h2>
+            <button class="close-modal" onclick="closeDeleteModal()">&times;</button>
+        </div>
+        <p style="font-size: 1.1rem; margin: 20px 0;" id="deleteModalMessage">Are you sure you want to delete this feedback entry?</p>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeDeleteModal()">Cancel</button>
+            <button class="modal-confirm" id="confirmDeleteBtn">Delete</button>
         </div>
     </div>
 </div>
@@ -670,9 +710,16 @@
             </small>
         </div>
 
-        <!-- Recent Activity Section - FIXED: Added this missing element -->
+        <!-- Recent Activity Section -->
         <div class="recent-activity">
-            <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+            <div class="recent-activity-header">
+                <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+                <div>
+                    <button class="delete-all-btn" onclick="confirmDeleteAll()">
+                        <i class="fas fa-trash-alt"></i> Delete All
+                    </button>
+                </div>
+            </div>
             <div id="recentList">
                 <div class="empty-state">No recent feedback</div>
             </div>
@@ -684,6 +731,64 @@
     // ==================== WEEKLY REPORT CONSTANTS ====================
     const WEEKLY_REPORT_KEY = 'saficheck_weekly_report';
     const LAST_REPORT_WEEK_KEY = 'saficheck_last_report_week';
+    
+    // ==================== DELETE FUNCTIONALITY ====================
+    let deleteTargetId = null;
+    let deleteTargetAll = false;
+    
+    function openDeleteModal(id) {
+        deleteTargetId = id;
+        deleteTargetAll = false;
+        document.getElementById('deleteModalMessage').textContent = 'Are you sure you want to delete this feedback entry?';
+        document.getElementById('deleteModal').style.display = 'flex';
+        document.getElementById('confirmDeleteBtn').onclick = confirmDelete;
+    }
+    
+    function confirmDeleteAll() {
+        if (feedbackData.length === 0) {
+            alert('No feedback entries to delete.');
+            return;
+        }
+        deleteTargetAll = true;
+        deleteTargetId = null;
+        document.getElementById('deleteModalMessage').textContent = `Are you sure you want to delete ALL ${feedbackData.length} feedback entries? This action cannot be undone!`;
+        document.getElementById('deleteModal').style.display = 'flex';
+        document.getElementById('confirmDeleteBtn').onclick = confirmDelete;
+    }
+    
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').style.display = 'none';
+        deleteTargetId = null;
+        deleteTargetAll = false;
+    }
+    
+    async function confirmDelete() {
+        try {
+            if (deleteTargetAll) {
+                // Delete all entries
+                for (const item of feedbackData) {
+                    await fetch('/api/feedback', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: item.id })
+                    });
+                }
+                alert(`✅ Deleted all ${feedbackData.length} entries.`);
+            } else if (deleteTargetId) {
+                await fetch('/api/feedback', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: deleteTargetId })
+                });
+                alert('✅ Feedback entry deleted successfully.');
+            }
+            closeDeleteModal();
+            loadData();
+        } catch (error) {
+            console.error('Delete failed:', error);
+            alert('❌ Failed to delete. Please try again.');
+        }
+    }
     
     // ==================== HELPER FUNCTIONS ====================
     function getCurrentTimestamp() {
@@ -708,14 +813,10 @@
     
     // ==================== SINGLE SOURCE OF TRUTH FOR FILTERING ====================
     function getActiveData() {
-        // Start with base data
         let data = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
-        
-        // Apply location filter if not 'all'
         if (currentFilter !== 'all') {
             data = data.filter(f => f.location === currentFilter);
         }
-        
         return data;
     }
     
@@ -800,7 +901,6 @@
         const satisfactionElement = document.getElementById("satisfaction");
         satisfactionElement.innerText = stats.satisfaction + "%";
         
-        // Color code satisfaction
         satisfactionElement.classList.remove('satisfaction-high', 'satisfaction-medium', 'satisfaction-low');
         if (stats.satisfaction >= 70) {
             satisfactionElement.classList.add('satisfaction-high');
@@ -1316,7 +1416,6 @@
         
         data.forEach(item => { 
             const date = new Date(item.timestamp);
-            // Fixed: Cleaner day index calculation
             const dayIndex = (date.getDay() + 6) % 7;
             const dayName = weekDays[dayIndex];
             if (dayName && dayScores[dayName]) {
@@ -1354,7 +1453,7 @@
     }
     
     function renderRecentList(data) {
-        const recent = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 5);
+        const recent = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 20);
         const container = document.getElementById('recentList');
         if (recent.length === 0) { 
             container.innerHTML = '<div class="empty-state">No recent feedback</div>'; 
@@ -1362,12 +1461,17 @@
         }
         container.innerHTML = recent.map(item => `
             <div class="recent-item">
-                <div class="recent-header">
-                    <span style="font-weight: 600;">${item.rating === 'good' ? '👍 Good' : '👎 Difficult'}</span>
-                    <small style="color: #6c86a3;">${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small>
+                <div class="recent-content">
+                    <div class="recent-header">
+                        <span style="font-weight: 600;">${item.rating === 'good' ? '👍 Good' : '👎 Difficult'}</span>
+                        <small style="color: #6c86a3;">${item.timestampDisplay || new Date(item.timestamp).toLocaleString()}</small>
+                    </div>
+                    <div class="recent-comment">${item.comment?.substring(0, 100) || 'No comment'}${item.comment?.length > 100 ? '...' : ''}</div>
+                    <div style="margin-top: 5px;"><small><i class="fas fa-map-marker-alt"></i> ${item.location}</small></div>
                 </div>
-                <div class="recent-comment">${item.comment?.substring(0, 100) || 'No comment'}${item.comment?.length > 100 ? '...' : ''}</div>
-                <div style="margin-top: 5px;"><small><i class="fas fa-map-marker-alt"></i> ${item.location}</small></div>
+                <button class="delete-btn" onclick="openDeleteModal(${item.id})" title="Delete this entry">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
             </div>
         `).join('');
     }
@@ -1419,9 +1523,11 @@
     window.generateWeeklyReport = generateWeeklyReport;
     window.applyDateFilter = applyDateFilter;
     window.resetDateFilter = resetDateFilter;
+    window.openDeleteModal = openDeleteModal;
+    window.closeDeleteModal = closeDeleteModal;
+    window.confirmDeleteAll = confirmDeleteAll;
     
     // Initialize - FIXED: Removed the line that clears session on every load
-    // Now session persists across page reloads
     if (isAuthenticated()) {
         showDashboard();
     } else {
