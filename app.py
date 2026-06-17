@@ -64,24 +64,22 @@ print(f"📱 Phone Number ID: {PHONE_NUMBER_ID}")
 print(f"📱 Token starts with: {WHATSAPP_TOKEN[:20]}...")
 print(f"📱 API URL: {WHATSAPP_API_URL}")
 
-# ==================== send_whatsapp_message ====================
+# ==================== FIXED send_whatsapp_message (NO + sign) ====================
 def send_whatsapp_message(phone_number, message):
-    """Send WhatsApp message using Meta Cloud API"""
+    """Send WhatsApp message using Meta Cloud API - digits ONLY, NO + sign"""
+    # ✅ FIX: Clean to digits only - NO + sign
     phone_number = re.sub(r'[^0-9]', '', str(phone_number))
+    
     if MOCK_MODE:
         print(f"📱 [MOCK MODE] Would send to {phone_number}: {message}")
         sys.stdout.flush()
         return True
     
     try:
-        phone_number = phone_number.strip()
-        if not phone_number.startswith('+'):
-            phone_number = '+' + phone_number
-        
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
-            "to": phone_number,
+            "to": phone_number,  # ✅ MUST be digits only - NO + sign
             "type": "text",
             "text": {
                 "preview_url": False,
@@ -89,38 +87,31 @@ def send_whatsapp_message(phone_number, message):
             }
         }
         
-        print(f"📤 Sending WhatsApp message to {phone_number}")
+        print(f"📤 Sending WhatsApp message to: {phone_number}")
+        print(f"📤 Payload: {json.dumps(payload, indent=2)}")
         sys.stdout.flush()
         
         response = requests.post(WHATSAPP_API_URL, headers=WHATSAPP_HEADERS, json=payload)
         
-        print("=" * 60)
-        print("🚨 WHATSAPP API RESPONSE 🚨")
-        print("=" * 60)
-        print(f"STATUS CODE: {response.status_code}")
-        print(f"RESPONSE BODY: {response.text}")
-        print("=" * 60)
-        sys.stdout.flush()
-
-        if response.status_code in [200, 201]:
-            try:
-                data = response.json()
-                if "messages" in data:
-                    print(f"✅ WhatsApp response: {response.text}")
-                    sys.stdout.flush()
-                    return True
-                print("❌ No 'messages' field returned")
+        try:
+            data = response.json()
+            print("FULL RESPONSE:", json.dumps(data, indent=2))
+            sys.stdout.flush()
+            
+            if response.status_code in [200, 201]:
+                print(f"✅ WhatsApp message sent successfully to {phone_number}")
+                sys.stdout.flush()
+                return True
+            else:
+                print(f"❌ FAILED WHATSAPP: {data}")
                 sys.stdout.flush()
                 return False
-            except Exception as e:
-                print(f"❌ JSON parse error: {e}")
-                sys.stdout.flush()
-                return False
-
-        print(f"❌ WhatsApp API error: {response.status_code}")
-        print(response.text)
-        sys.stdout.flush()
-        return False
+                
+        except Exception as e:
+            print(f"❌ JSON parse error: {e}")
+            print(f"Raw response: {response.text}")
+            sys.stdout.flush()
+            return False
             
     except Exception as e:
         print(f"❌ WhatsApp send error: {e}")
@@ -238,9 +229,9 @@ def insert_test_numbers():
         cursor = conn.cursor()
         
         test_numbers = [
-            ('+233550157210', 'Ghana Number 1', 'Ghana', True),
-            ('+233506896041', 'Ghana Number 2', 'Ghana', True),
-            ('+15556664486', 'Meta Test Number', 'USA', True),
+            ('233550157210', 'Ghana Number 1', 'Ghana', True),  # ✅ Digits only
+            ('233506896041', 'Ghana Number 2', 'Ghana', True),  # ✅ Digits only
+            ('15556664486', 'Meta Test Number', 'USA', True),   # ✅ Digits only
         ]
         
         for number, name, country, active in test_numbers:
@@ -571,8 +562,8 @@ def add_notification_number():
     if not phone_number:
         return jsonify({'success': False, 'error': 'Phone number required'}), 400
     
-    if not phone_number.startswith('+'):
-        phone_number = '+' + phone_number
+    # Clean phone number: digits only
+    phone_number = re.sub(r'[^0-9]', '', str(phone_number))
     
     conn = None
     try:
@@ -642,11 +633,10 @@ def test_whatsapp():
     phone = request.args.get('phone')
 
     if not phone:
-        return jsonify({'error': 'Provide ?phone=+233XXXXXXXXX'}), 400
+        return jsonify({'error': 'Provide ?phone=233XXXXXXXXX'}), 400
 
-    phone = phone.strip()
-    if not phone.startswith('+'):
-        phone = '+' + phone
+    # ✅ Clean: digits only
+    phone = re.sub(r'[^0-9]', '', str(phone))
 
     print(f"🧪 Test endpoint called for phone: {phone}")
     sys.stdout.flush()
@@ -673,12 +663,8 @@ def send_from_sheet():
         if not phone:
             return jsonify({"error": "No phone provided"}), 400
 
-        # Format number safely
-        phone = phone.strip()
-        if phone.startswith("0"):
-            phone = "233" + phone[1:]
-        if not phone.startswith("+"):
-            phone = "+" + phone
+        # ✅ Clean: digits only
+        phone = re.sub(r'[^0-9]', '', str(phone))
 
         message = "⏰ SafiCheck Reminder: Please complete your check-in: https://safi-check.onrender.com"
 
