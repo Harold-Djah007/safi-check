@@ -11,6 +11,7 @@ from psycopg2.pool import SimpleConnectionPool
 from werkzeug.security import generate_password_hash, check_password_hash
 import atexit
 import re
+import sys
 
 app = Flask(__name__)
 
@@ -59,11 +60,16 @@ WHATSAPP_HEADERS = {
 }
 
 print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
+print(f"📱 Phone Number ID: {PHONE_NUMBER_ID}")
+print(f"📱 Token starts with: {WHATSAPP_TOKEN[:20]}...")
+print(f"📱 API URL: {WHATSAPP_API_URL}")
 
+# ==================== send_whatsapp_message ====================
 def send_whatsapp_message(phone_number, message):
     """Send WhatsApp message using Meta Cloud API"""
     if MOCK_MODE:
         print(f"📱 [MOCK MODE] Would send to {phone_number}: {message}")
+        sys.stdout.flush()
         return True
     
     try:
@@ -83,31 +89,41 @@ def send_whatsapp_message(phone_number, message):
         }
         
         print(f"📤 Sending WhatsApp message to {phone_number}")
-        print(f"📤 Payload: {json.dumps(payload, indent=2)}")
+        sys.stdout.flush()
         
         response = requests.post(WHATSAPP_API_URL, headers=WHATSAPP_HEADERS, json=payload)
         
-        print("STATUS:", response.status_code)
-        print("BODY:", response.text)
+        print("=" * 60)
+        print("🚨 WHATSAPP API RESPONSE 🚨")
+        print("=" * 60)
+        print(f"STATUS CODE: {response.status_code}")
+        print(f"RESPONSE BODY: {response.text}")
+        print("=" * 60)
+        sys.stdout.flush()
 
         if response.status_code in [200, 201]:
             try:
                 data = response.json()
                 if "messages" in data:
                     print(f"✅ WhatsApp response: {response.text}")
+                    sys.stdout.flush()
                     return True
                 print("❌ No 'messages' field returned")
+                sys.stdout.flush()
                 return False
             except Exception as e:
                 print(f"❌ JSON parse error: {e}")
+                sys.stdout.flush()
                 return False
 
         print(f"❌ WhatsApp API error: {response.status_code}")
         print(response.text)
+        sys.stdout.flush()
         return False
             
     except Exception as e:
         print(f"❌ WhatsApp send error: {e}")
+        sys.stdout.flush()
         return False
 
 # ==================== DATABASE SETUP ====================
@@ -296,7 +312,7 @@ class NotificationScheduler:
         self.last_sent_date = None
         self.running = True
         self.target_hour_utc = 14
-        self.target_minute = 10
+        self.target_minute = 0
         self.lock = None
         self.is_scheduler_active = False
     
@@ -334,7 +350,7 @@ class NotificationScheduler:
             self.last_sent_date = today
     
     def send_notifications(self):
-        message = "⏰ SafiCheck Reminder: It's time for daily check-in! Please submit your feedback at: https://safi-check.onrender.com"
+        message = "⏰ SafiCheck Reminder: Please complete your check-in: https://safi-check.onrender.com"
         
         recipients = self.get_active_numbers()
         
@@ -578,8 +594,8 @@ def add_notification_number():
 @app.route('/api/scheduler-status', methods=['GET'])
 def get_scheduler_status():
     now = datetime.utcnow()
-    next_run = datetime(now.year, now.month, now.day, 16, 30, 0)
-    if now.hour >= 16 and now.minute >= 30:
+    next_run = datetime(now.year, now.month, now.day, 14, 0, 0)
+    if now.hour >= 14 and now.minute >= 0:
         next_run = next_run.replace(day=next_run.day + 1)
     
     conn = None
@@ -591,8 +607,8 @@ def get_scheduler_status():
         
         return jsonify({
             'scheduler_running': scheduler.is_scheduler_active,
-            'target_hour_utc': 16,
-            'target_minute_utc': 30,
+            'target_hour_utc': 14,
+            'target_minute_utc': 0,
             'next_run_utc': next_run.isoformat(),
             'active_recipients': active_count,
             'mode': 'MOCK' if MOCK_MODE else 'LIVE'
@@ -605,7 +621,7 @@ def get_scheduler_status():
 
 @app.route('/api/trigger-whatsapp')
 def trigger_whatsapp():
-    """Manually trigger WhatsApp notifications - removes timing uncertainty"""
+    """Manually trigger WhatsApp notifications"""
     try:
         scheduler.send_notifications()
         return jsonify({
@@ -620,7 +636,6 @@ def trigger_whatsapp():
             'error': str(e)
         }), 500
 
-# ==================== THE MISSING ENDPOINT - TEST WHATSAPP ====================
 @app.route('/api/test-whatsapp', methods=['GET'])
 def test_whatsapp():
     phone = request.args.get('phone')
@@ -629,9 +644,11 @@ def test_whatsapp():
         return jsonify({'error': 'Provide ?phone=+233XXXXXXXXX'}), 400
 
     phone = phone.strip()
-
     if not phone.startswith('+'):
         phone = '+' + phone
+
+    print(f"🧪 Test endpoint called for phone: {phone}")
+    sys.stdout.flush()
 
     result = send_whatsapp_message(
         phone,
@@ -643,6 +660,41 @@ def test_whatsapp():
         'phone': phone,
         'mode': 'LIVE' if not MOCK_MODE else 'MOCK'
     })
+
+# ==================== GOOGLE SHEETS INTEGRATION ====================
+@app.route('/api/send-from-sheet', methods=['POST'])
+def send_from_sheet():
+    """Endpoint for Google Sheets to trigger WhatsApp messages"""
+    try:
+        data = request.get_json()
+        phone = data.get("phone")
+
+        if not phone:
+            return jsonify({"error": "No phone provided"}), 400
+
+        # Format number safely
+        phone = phone.strip()
+        if phone.startswith("0"):
+            phone = "233" + phone[1:]
+        if not phone.startswith("+"):
+            phone = "+" + phone
+
+        message = "⏰ SafiCheck Reminder: Please complete your check-in: https://safi-check.onrender.com"
+
+        print(f"📤 Sending from Google Sheets to: {phone}")
+        sys.stdout.flush()
+
+        success = send_whatsapp_message(phone, message)
+
+        return jsonify({
+            "success": success,
+            "phone": phone
+        })
+
+    except Exception as e:
+        print(f"❌ Error in send-from-sheet: {e}")
+        sys.stdout.flush()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/debug-db')
 def debug_db():
@@ -892,5 +944,7 @@ print("=" * 60)
 print("🌍 Safi-Check System Running!")
 print("=" * 60)
 print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
+print(f"📱 Phone Number ID: {PHONE_NUMBER_ID}")
+print(f"📱 Token (first 20 chars): {WHATSAPP_TOKEN[:20]}...")
 print(f"⏰ Scheduler: Daily at {scheduler.target_hour_utc}:{scheduler.target_minute:02d} UTC")
 print("=" * 60)
