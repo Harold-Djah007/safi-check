@@ -67,6 +67,7 @@ print(f"📱 API URL: {WHATSAPP_API_URL}")
 # ==================== send_whatsapp_message ====================
 def send_whatsapp_message(phone_number, message):
     """Send WhatsApp message using Meta Cloud API"""
+    phone_number = re.sub(r'[^0-9]', '', str(phone_number))
     if MOCK_MODE:
         print(f"📱 [MOCK MODE] Would send to {phone_number}: {message}")
         sys.stdout.flush()
