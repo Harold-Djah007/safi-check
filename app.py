@@ -204,6 +204,7 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_checkin ON alerts(checkin_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkins_location ON checkins(location)")
 
+        # Check if admin exists, if not create with proper hashed password
         cursor.execute("SELECT * FROM users WHERE username = 'admin'")
         if not cursor.fetchone():
             hashed_password = generate_password_hash('admin123')
@@ -211,6 +212,14 @@ def init_db():
                 INSERT INTO users (username, password_hash, created_at)
                 VALUES (%s, %s, %s)
             """, ('admin', hashed_password, datetime.now()))
+            print("✅ Created admin user with hashed password")
+        else:
+            # Update admin password to ensure it's properly hashed
+            hashed_password = generate_password_hash('admin123')
+            cursor.execute("""
+                UPDATE users SET password_hash = %s WHERE username = 'admin'
+            """, (hashed_password,))
+            print("✅ Updated admin password hash")
 
         conn.commit()
         print("✅ PostgreSQL database initialized")
@@ -412,7 +421,6 @@ def index():
 def admin_dashboard():
     return send_from_directory('static', 'admin.html')
 
-# ==================== FIXED: REMOVED AUTHENTICATION FROM /api/feedback ====================
 @app.route('/api/feedback', methods=['GET'])
 def get_feedback():
     """API endpoint for admin dashboard - returns all feedback with red flags"""
@@ -685,7 +693,285 @@ def send_from_sheet():
         sys.stdout.flush()
         return jsonify({"error": str(e)}), 500
 
-# ==================== FIXED: ADDED DEBUG DATABASE ENDPOINT ====================
+# ==================== FIXED: USER AUTHENTICATION ====================
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """Login endpoint with proper password verification"""
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    ip_address = request.remote_addr
+    
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password required'}), 400
+    
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get user from database
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        
+        if user:
+            password_hash = user['password_hash']
+            is_valid = False
+            
+            # Try to verify with check_password_hash
+            try:
+                if password_hash:
+                    is_valid = check_password_hash(password_hash, password)
+                    print(f"🔐 Password verification for {username}: {'SUCCESS' if is_valid else 'FAILED'}")
+            except Exception as e:
+                print(f"❌ Password check error: {e}")
+                is_valid = False
+            
+            if is_valid:
+                # Log successful login
+                cursor.execute("""
+                    INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (username, datetime.utcnow(), ip_address, 'success', user_agent))
+                conn.commit()
+                return jsonify({'success': True, 'username': username})
+        
+        # Log failed login
+        cursor.execute("""
+            INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (username, datetime.utcnow(), ip_address, 'failed', user_agent))
+        conn.commit()
+        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+        
+    except Exception as e:
+        print(f"❌ Login error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'Server error'}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    """Register a new user with hashed password"""
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password required'}), 400
+    
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        return jsonify({'success': False, 'error': 'Username must be 3-30 characters (letters, numbers, underscore)'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
+    
+    # Hash the password
+    hashed_password = generate_password_hash(password)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO users (username, password_hash, created_at)
+            VALUES (%s, %s, %s)
+        """, (username, hashed_password, datetime.now()))
+        conn.commit()
+        print(f"✅ User registered: {username}")
+        return jsonify({'success': True})
+    except psycopg2.IntegrityError:
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'error': 'Username already taken'}), 400
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ Registration error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/reset-password', methods=['POST'])
+def api_reset_password():
+    """Reset a user's password"""
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    new_password = data.get('new_password', '')
+    
+    if not username or not new_password:
+        return jsonify({'success': False, 'error': 'Username and new password required'}), 400
+    
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
+    
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
+    
+    hashed_password = generate_password_hash(new_password)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET password_hash = %s WHERE username = %s", (hashed_password, username))
+        conn.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        print(f"✅ Password reset for: {username}")
+        return jsonify({'success': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ Password reset error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/users', methods=['GET'])
+def api_get_users():
+    """Get all users (without passwords)"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT id, username, created_at FROM users ORDER BY id")
+        users = cursor.fetchall()
+        return jsonify(users)
+    except Exception as e:
+        print(f"❌ Error fetching users: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/delete-user', methods=['POST'])
+def api_delete_user():
+    """Delete a user"""
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    
+    if not username:
+        return jsonify({'success': False, 'error': 'Username required'}), 400
+    
+    if username == 'admin':
+        return jsonify({'success': False, 'error': 'Cannot delete default admin user'}), 400
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE username = %s", (username,))
+        conn.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        print(f"🗑️ Deleted user: {username}")
+        return jsonify({'success': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ Delete user error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/login-logs', methods=['GET'])
+def api_get_login_logs():
+    """Get login history"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 200")
+        logs = cursor.fetchall()
+        
+        formatted_logs = []
+        for log in logs:
+            formatted_logs.append({
+                'id': log['id'],
+                'username': log['username'],
+                'loginTimeDisplay': log['login_time'].strftime('%m/%d/%Y, %I:%M:%S %p') if log['login_time'] else '',
+                'ipAddress': log['ip_address'],
+                'status': log['status'],
+                'userAgent': log.get('user_agent', 'Unknown')[:50] if log.get('user_agent') else 'Unknown'
+            })
+        
+        return jsonify(formatted_logs)
+    except Exception as e:
+        print(f"❌ Error fetching login logs: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+@app.route('/api/debug-login', methods=['POST'])
+def debug_login():
+    """Debug endpoint to test password verification"""
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({
+                'exists': False,
+                'message': f'User "{username}" not found in database'
+            })
+        
+        password_hash = user['password_hash']
+        
+        # Test with check_password_hash
+        try:
+            is_valid = check_password_hash(password_hash, password)
+        except Exception as e:
+            return jsonify({
+                'exists': True,
+                'username': username,
+                'hash_preview': password_hash[:50] + '...' if password_hash else 'None',
+                'hash_type': 'unknown',
+                'password_valid': False,
+                'error': f'Hash check error: {str(e)}'
+            })
+        
+        return jsonify({
+            'exists': True,
+            'username': username,
+            'hash_preview': password_hash[:50] + '...' if password_hash else 'None',
+            'hash_type': 'scrypt' if password_hash and password_hash.startswith('scrypt:') else 'pbkdf2' if password_hash and password_hash.startswith('pbkdf2:sha256:') else 'unknown',
+            'password_valid': is_valid,
+            'message': '✅ Password is valid!' if is_valid else '❌ Password is invalid'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
 @app.route('/api/debug-db')
 def debug_db():
     """Debug endpoint to check database contents"""
@@ -717,202 +1003,6 @@ def debug_db():
     finally:
         if conn:
             conn.close()
-
-# ==================== USER AUTHENTICATION ====================
-
-@app.route('/api/login', methods=['POST'])
-def api_login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    user_agent = request.headers.get('User-Agent', 'Unknown')
-    ip_address = request.remote_addr
-    
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Username and password required'}), 400
-    
-    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
-        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
-        
-        if user:
-            password_hash = user[2] if len(user) > 2 else None
-            is_valid = False
-            
-            if password_hash and password_hash.startswith('pbkdf2:sha256:'):
-                is_valid = check_password_hash(password_hash, password)
-            else:
-                cursor.execute("SELECT * FROM users WHERE username = %s AND password_hash = %s", (username, password))
-                old_user = cursor.fetchone()
-                is_valid = old_user is not None
-                
-                if is_valid:
-                    new_hash = generate_password_hash(password)
-                    cursor.execute("UPDATE users SET password_hash = %s WHERE username = %s", (new_hash, username))
-                    conn.commit()
-            
-            if is_valid:
-                cursor.execute("""
-                    INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (username, datetime.utcnow(), ip_address, 'success', user_agent))
-                conn.commit()
-                return jsonify({'success': True, 'username': username})
-        
-        cursor.execute("""
-            INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (username, datetime.utcnow(), ip_address, 'failed', user_agent))
-        conn.commit()
-        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
-        
-    except Exception as e:
-        print(f"❌ Login error: {e}")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/register', methods=['POST'])
-def api_register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Username and password required'}), 400
-    
-    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
-        return jsonify({'success': False, 'error': 'Username must be 3-30 characters (letters, numbers, underscore)'}), 400
-    
-    if len(password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
-    
-    hashed_password = generate_password_hash(password)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO users (username, password_hash, created_at)
-            VALUES (%s, %s, %s)
-        """, (username, hashed_password, datetime.now()))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/reset-password', methods=['POST'])
-def api_reset_password():
-    data = request.get_json()
-    username = data.get('username')
-    new_password = data.get('new_password')
-    
-    if not username or not new_password:
-        return jsonify({'success': False, 'error': 'Username and new password required'}), 400
-    
-    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
-        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
-    
-    if len(new_password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
-    
-    hashed_password = generate_password_hash(new_password)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET password_hash = %s WHERE username = %s", (hashed_password, username))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/users', methods=['GET'])
-def api_get_users():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT id, username, created_at FROM users")
-        users = cursor.fetchall()
-        return jsonify(users)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/delete-user', methods=['POST'])
-def api_delete_user():
-    data = request.get_json()
-    username = data.get('username')
-    
-    if not username:
-        return jsonify({'success': False, 'error': 'Username required'}), 400
-    
-    if username == 'admin':
-        return jsonify({'success': False, 'error': 'Cannot delete default admin user'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE username = %s", (username,))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/login-logs', methods=['GET'])
-def api_get_login_logs():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 200")
-        logs = cursor.fetchall()
-        
-        formatted_logs = []
-        for log in logs:
-            formatted_logs.append({
-                'id': log['id'],
-                'username': log['username'],
-                'loginTimeDisplay': log['login_time'].strftime('%m/%d/%Y, %I:%M:%S %p') if log['login_time'] else '',
-                'ipAddress': log['ip_address'],
-                'status': log['status'],
-                'userAgent': log.get('user_agent', 'Unknown')[:50] if log.get('user_agent') else 'Unknown'
-            })
-        
-        return jsonify(formatted_logs)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
 
 # ==================== SCHEDULER INSTANCE ====================
 
