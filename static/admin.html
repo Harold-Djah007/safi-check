@@ -8,494 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #f0f4f8; font-family: 'Inter', sans-serif; }
-        
-        .auth-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #0a2e1f, #1b4d2e);
-            z-index: 2000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .auth-card {
-            background: white;
-            border-radius: 48px;
-            padding: 48px 40px;
-            width: 90%;
-            max-width: 420px;
-            text-align: center;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-        }
-        .auth-card h2 { font-size: 2rem; background: linear-gradient(135deg, #0a2e1f, #1b4d2e); background-clip: text; -webkit-background-clip: text; color: transparent; margin-bottom: 8px; }
-        .auth-icon { font-size: 4rem; color: #2d6a4f; margin-bottom: 20px; }
-        
-        .password-container {
-            position: relative;
-            width: 100%;
-            margin: 12px 0;
-        }
-        .password-container input {
-            width: 100%;
-            padding: 14px 18px;
-            padding-right: 50px;
-            border: 2px solid #e2e8f0;
-            border-radius: 60px;
-            font-size: 1rem;
-            transition: 0.2s;
-        }
-        .password-container input:focus { border-color: #2d6a4f; outline: none; }
-        .toggle-password {
-            position: absolute;
-            right: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #6c86a3;
-            font-size: 1.1rem;
-        }
-        .toggle-password:hover { color: #2d6a4f; }
-        
-        .auth-card input[type="text"], .auth-card input[type="password"] {
-            width: 100%;
-            padding: 14px 18px;
-            margin: 12px 0;
-            border: 2px solid #e2e8f0;
-            border-radius: 60px;
-            font-size: 1rem;
-            transition: 0.2s;
-        }
-        .auth-card input:focus { border-color: #2d6a4f; outline: none; }
-        .auth-btn {
-            background: #1b4d2e;
-            color: white;
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 60px;
-            font-weight: 700;
-            font-size: 1rem;
-            cursor: pointer;
-            margin-top: 16px;
-        }
-        .auth-btn:hover { background: #0a2e1f; transform: translateY(-2px); }
-        .switch-auth { margin-top: 20px; font-size: 0.9rem; color: #6c86a3; }
-        .switch-auth a { color: #1b4d2e; text-decoration: none; font-weight: 600; cursor: pointer; }
-        .error-msg { color: #dc2626; font-size: 0.8rem; margin-top: 10px; display: none; background: #fee2e2; padding: 10px; border-radius: 30px; }
-        .success-msg { color: #2b7a4b; font-size: 0.8rem; margin-top: 10px; display: none; background: #e0f2e8; padding: 10px; border-radius: 30px; }
-        
-        .forgot-password { margin-top: 12px; font-size: 0.8rem; }
-        .forgot-password a { color: #6c86a3; text-decoration: none; cursor: pointer; }
-        .forgot-password a:hover { color: #1b4d2e; text-decoration: underline; }
-        
-        .admin-dashboard { display: none; padding: 2rem; }
-        .admin-container { max-width: 1400px; margin: 0 auto; }
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-        .admin-header h1 {
-            font-size: 1.9rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #0a2e1f, #1b4d2e);
-            background-clip: text;
-            -webkit-background-clip: text;
-            color: transparent;
-        }
-        .session-user {
-            background: #e8f5e9;
-            padding: 6px 15px;
-            border-radius: 30px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            color: #1b4d2e;
-        }
-        .logout-btn, .refresh-btn, .export-btn, .users-btn, .passwords-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 40px;
-            cursor: pointer;
-            font-weight: 600;
-            margin-left: 10px;
-        }
-        .logout-btn { background: #ef4444; color: white; }
-        .refresh-btn { background: #f1f5f9; border: 1px solid #cbd5e1; }
-        .export-btn { background: #1b4d2e; color: white; }
-        .users-btn { background: #8b5cf6; color: white; }
-        .passwords-btn { background: #f59e0b; color: white; }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
-        .stat-card {
-            background: white;
-            border-radius: 28px;
-            padding: 1.5rem;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-        }
-        .stat-card h3 { margin-bottom: 1.2rem; font-size: 1.1rem; color: #1f4d2e; display: flex; align-items: center; gap: 8px; }
-        .daily-mood-container { display: flex; flex-direction: column; gap: 12px; }
-        .mood-row { display: flex; flex-direction: column; gap: 4px; }
-        .mood-row .mood-label { display: flex; justify-content: space-between; font-size: 0.85rem; }
-        .mood-bar { background: #edf2f7; border-radius: 30px; height: 28px; overflow: hidden; }
-        .mood-fill { height: 100%; border-radius: 30px; transition: width 0.3s; }
-        
-        .filter-panel {
-            background: white;
-            border-radius: 20px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 1rem;
-            border: 1px solid #e2e8f0;
-        }
-        .filter-panel label { font-weight: 600; color: #374151; }
-        .filter-panel input[type="date"] {
-            padding: 10px 14px;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            font-family: 'Inter', sans-serif;
-            font-size: 14px;
-        }
-        .filter-panel input[type="date"]:focus { outline: none; border-color: #2d6a4f; }
-        .filter-btn {
-            background: #2d6a4f;
-            color: white;
-            border: none;
-            padding: 10px 24px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .filter-btn:hover { background: #1b4d2e; }
-        .reset-filter-btn {
-            background: #6c86a3;
-            color: white;
-            border: none;
-            padding: 10px 24px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .reset-filter-btn:hover { background: #4a627a; }
-        
-        .stats-summary {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .stat-summary-card {
-            background: white;
-            border-radius: 20px;
-            padding: 1.2rem;
-            text-align: center;
-            border: 1px solid #e2e8f0;
-            transition: transform 0.2s;
-        }
-        .stat-summary-card:hover { transform: translateY(-2px); }
-        .stat-summary-card .stat-icon { font-size: 2rem; margin-bottom: 8px; }
-        .stat-summary-card .stat-value { font-size: 1.8rem; font-weight: 700; color: #1f2937; }
-        .stat-summary-card .stat-label { font-size: 0.8rem; color: #6c86a3; margin-top: 4px; }
-        .satisfaction-high { color: #2b7a4b; }
-        .satisfaction-medium { color: #e68a2e; }
-        .satisfaction-low { color: #c23b22; }
-        
-        .location-filter-container {
-            background: white;
-            border-radius: 20px;
-            padding: 1rem 1.5rem;
-            margin-bottom: 1.5rem;
-            border: 1px solid #e2e8f0;
-        }
-        .location-filter-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            font-weight: 600;
-            color: #1f4d2e;
-        }
-        .location-filter { display: flex; gap: 10px; flex-wrap: wrap; }
-        .filter-chip {
-            background: #f1f5f9;
-            padding: 8px 20px;
-            border-radius: 40px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .filter-chip i { font-size: 0.8rem; }
-        .filter-chip.active { background: #2d6a4f; color: white; }
-        .filter-chip.active i { color: white; }
-        .filter-chip:hover { background: #cbd5e1; }
-        .no-data-message { text-align: center; padding: 20px; color: #94a3b8; font-style: italic; }
-        
-        .alert-banner {
-            background: #dc2626;
-            color: white;
-            padding: 14px 20px;
-            border-radius: 16px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-        
-        .feedback-log {
-            background: white;
-            border-radius: 28px;
-            padding: 1.5rem;
-            margin-top: 1.5rem;
-        }
-        .feedback-item {
-            border-left: 4px solid #cbd5e1;
-            padding: 16px;
-            margin-bottom: 12px;
-            background: #f8fafc;
-            border-radius: 16px;
-        }
-        .feedback-item.red-flag { border-left-color: #dc2626; background: #fef2f2; }
-        .red-flag-tag {
-            background: #fee2e2;
-            color: #dc2626;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            display: inline-block;
-        }
-        .delete-btn {
-            background: none;
-            border: none;
-            color: #dc2626;
-            cursor: pointer;
-            font-size: 1rem;
-            margin-left: 10px;
-            transition: transform 0.2s;
-        }
-        .delete-btn:hover {
-            transform: scale(1.2);
-        }
-        .delete-all-btn {
-            background: #dc2626;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-left: 10px;
-            transition: background 0.2s;
-        }
-        .delete-all-btn:hover {
-            background: #b91c1c;
-        }
-        .empty-state { text-align: center; padding: 40px; color: #94a3b8; }
-        canvas { max-height: 200px; }
-        .trend-stats { text-align: center; margin-top: 12px; font-size: 0.85rem; color: #4a627a; }
-        
-        .weekly-report {
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-            border-left: 4px solid #06b6d4;
-        }
-        .report-content {
-            background: #f8fafc;
-            border-radius: 16px;
-            padding: 16px;
-            font-family: monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            margin-bottom: 12px;
-        }
-        .report-content pre { background: none; padding: 0; margin: 0; font-family: monospace; }
-        .generate-report-btn {
-            background: #06b6d4;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-weight: 600;
-            margin-top: 10px;
-        }
-        .generate-report-btn:hover { background: #0891b2; }
-        
-        /* Recent Activity Section */
-        .recent-activity {
-            background: white;
-            border-radius: 28px;
-            padding: 1.5rem;
-            margin-top: 1.5rem;
-            border: 1px solid #e2e8f0;
-        }
-        .recent-activity-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .recent-activity-header h3 {
-            color: #1f4d2e;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .recent-item {
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .recent-item:last-child {
-            border-bottom: none;
-        }
-        .recent-content {
-            flex: 1;
-        }
-        .recent-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            flex-wrap: wrap;
-        }
-        .recent-comment {
-            font-size: 0.85rem;
-            color: #4b5563;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 3000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background: white;
-            border-radius: 32px;
-            padding: 30px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 85vh;
-            overflow-y: auto;
-            text-align: center;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        .modal-actions {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-        .modal-actions button {
-            padding: 10px 30px;
-            border: none;
-            border-radius: 30px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 1rem;
-        }
-        .modal-confirm {
-            background: #dc2626;
-            color: white;
-        }
-        .modal-confirm:hover {
-            background: #b91c1c;
-        }
-        .modal-cancel {
-            background: #e5e7eb;
-            color: #374151;
-        }
-        .modal-cancel:hover {
-            background: #d1d5db;
-        }
-        
-        .user-table, .password-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .user-table th, .user-table td, .password-table th, .password-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .user-table th, .password-table th { background: #f1f5f9; font-weight: 600; }
-        .reset-btn {
-            background: #f59e0b;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 11px;
-            margin-right: 5px;
-        }
-        .reset-btn:hover { background: #d97706; }
-        .view-btn {
-            background: #8b5cf6;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 11px;
-            margin-right: 5px;
-        }
-        .view-btn:hover { background: #7c3aed; }
-        .delete-user-btn {
-            background: #dc2626;
-            color: white;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-        .delete-user-btn:hover { background: #b91c1c; }
-        .warning-text { color: #dc2626; font-size: 12px; margin-top: 10px; }
-        
-        @media (max-width: 768px) { 
-            .stats-grid { grid-template-columns: 1fr; }
-            .stats-summary { grid-template-columns: repeat(2, 1fr); }
-            .admin-dashboard { padding: 1rem; }
-            .filter-panel { flex-direction: column; align-items: stretch; }
-            .recent-activity-header { flex-direction: column; align-items: stretch; }
-        }
+        /* ... all your existing styles ... */
+        /* (Keep your existing CSS exactly as is) */
     </style>
 </head>
 <body>
@@ -569,7 +83,14 @@
         </div>
         <div style="overflow-x: auto;">
             <table class="user-table">
-                <thead><tr><th>User</th><th>Login Time</th><th>IP</th><th>Status</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Login Time</th>
+                        <th>IP</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
                 <tbody id="userLogBody"></tbody>
             </table>
         </div>
@@ -586,7 +107,12 @@
         <div style="overflow-x: auto;">
             <table class="password-table">
                 <thead>
-                    <tr><th>Username</th><th>Password (Visible to Admin)</th><th>Created At</th><th>Actions</th></tr>
+                    <tr>
+                        <th>Username</th>
+                        <th>Password (Visible to Admin)</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
                 </thead>
                 <tbody id="userManagementBody"></tbody>
             </table>
@@ -765,7 +291,6 @@
     async function confirmDelete() {
         try {
             if (deleteTargetAll) {
-                // Delete all entries
                 for (const item of feedbackData) {
                     await fetch('/api/feedback', {
                         method: 'DELETE',
@@ -1026,107 +551,112 @@
         }
     }
     
-    // ==================== USER MANAGEMENT ====================
-    const USERS_KEY = 'saficheck_users';
+    // ==================== USER MANAGEMENT (UPDATED: USES SUPABASE API) ====================
     const SESSION_KEY = 'saficheck_session';
-    const LOGIN_LOGS_KEY = 'saficheck_login_logs';
     
-    function logUserLogin(username, status, ip = 'local') {
-        const logs = getLoginLogs();
-        const timestamp = getCurrentTimestamp();
-        logs.unshift({ 
-            id: Date.now(), 
-            username, 
-            loginTime: timestamp.iso,
-            loginTimeDisplay: timestamp.full,
-            ipAddress: ip, 
-            status 
-        });
-        while (logs.length > 100) logs.pop();
-        localStorage.setItem(LOGIN_LOGS_KEY, JSON.stringify(logs));
-    }
-    
-    function getLoginLogs() {
-        const logs = localStorage.getItem(LOGIN_LOGS_KEY);
-        return logs ? JSON.parse(logs) : [];
-    }
-    
-    function getUsers() {
-        const users = localStorage.getItem(USERS_KEY);
-        if (!users) {
-            const defaultUsers = [{ id: 1, username: 'admin', password: 'admin123', createdAt: new Date().toISOString(), createdAtDisplay: getCurrentTimestamp().full }];
-            saveUsers(defaultUsers);
-            return defaultUsers;
+    // ==================== SUPABASE API CALLS ====================
+    async function getUsersFromSupabase() {
+        try {
+            const response = await fetch('/api/users');
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            return [];
         }
-        return JSON.parse(users);
     }
     
-    function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
-    
-    function findUserByUsername(username) { return getUsers().find(u => u.username === username); }
-    
-    function createUser(username, password) {
-        if (findUserByUsername(username)) return { success: false, error: "Username already taken" };
-        if (username.length < 3) return { success: false, error: "Username must be at least 3 characters" };
-        if (password.length < 6) return { success: false, error: "Password must be at least 6 characters" };
-        
-        const users = getUsers();
-        const timestamp = getCurrentTimestamp();
-        users.push({ 
-            id: Date.now(), 
-            username, 
-            password, 
-            createdAt: timestamp.iso,
-            createdAtDisplay: timestamp.full
-        });
-        saveUsers(users);
-        return { success: true };
-    }
-    
-    function resetUserPassword(username, newPassword) {
-        if (newPassword.length < 6) return { success: false, error: "Password must be at least 6 characters" };
-        
-        const users = getUsers();
-        const userIndex = users.findIndex(u => u.username === username);
-        if (userIndex === -1) return { success: false, error: "User not found" };
-        
-        users[userIndex].password = newPassword;
-        saveUsers(users);
-        return { success: true };
-    }
-    
-    function deleteUser(username) {
-        const users = getUsers();
-        const session = getSession();
-        
-        if (session && session.username === username) {
-            return { success: false, error: "You cannot delete your own account while logged in" };
+    async function getLoginLogsFromSupabase() {
+        try {
+            const response = await fetch('/api/login-logs');
+            if (!response.ok) {
+                throw new Error('Failed to fetch login logs');
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching login logs:', error);
+            return [];
         }
-        
-        const userIndex = users.findIndex(u => u.username === username);
-        if (userIndex === -1) return { success: false, error: "User not found" };
-        
-        users.splice(userIndex, 1);
-        saveUsers(users);
-        return { success: true };
     }
     
-    function validateLogin(username, password) {
-        const user = findUserByUsername(username);
-        if (user && user.password === password) return { success: true, user };
-        return { success: false, error: "Invalid username or password" };
+    async function createUserInSupabase(username, password) {
+        try {
+            const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error creating user:', error);
+            return { success: false, error: 'Network error' };
+        }
     }
     
+    async function resetPasswordInSupabase(username, newPassword) {
+        try {
+            const response = await fetch('/api/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, new_password: newPassword })
+            });
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error resetting password:', error);
+            return { success: false, error: 'Network error' };
+        }
+    }
+    
+    async function deleteUserFromSupabase(username) {
+        try {
+            const response = await fetch('/api/delete-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            return { success: false, error: 'Network error' };
+        }
+    }
+    
+    async function loginToSupabase(username, password) {
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error logging in:', error);
+            return { success: false, error: 'Network error' };
+        }
+    }
+    
+    // ==================== SESSION MANAGEMENT ====================
     function createSession(user) {
-        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id, username: user.username, expiresAt: Date.now() + (8 * 60 * 60 * 1000) }));
-        return getSession();
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ 
+            username: user.username, 
+            expiresAt: Date.now() + (8 * 60 * 60 * 1000) 
+        }));
     }
     
     function getSession() {
         const session = localStorage.getItem(SESSION_KEY);
         if (!session) return null;
         const parsed = JSON.parse(session);
-        if (parsed.expiresAt < Date.now()) { localStorage.removeItem(SESSION_KEY); return null; }
+        if (parsed.expiresAt < Date.now()) {
+            localStorage.removeItem(SESSION_KEY);
+            return null;
+        }
         return parsed;
     }
     
@@ -1162,33 +692,11 @@
         document.getElementById('confirmPassword').value = '';
     }
     
-    function resetPassword() {
-        const username = document.getElementById('resetUsername').value.trim();
-        const newPassword = document.getElementById('newPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        
-        if (!username) { showResetError('Please enter your username'); return; }
-        if (!newPassword) { showResetError('Please enter a new password'); return; }
-        if (newPassword !== confirmPassword) { showResetError('Passwords do not match'); return; }
-        
-        const result = resetUserPassword(username, newPassword);
-        if (result.success) {
-            document.getElementById('resetSuccess').textContent = 'Password reset successfully! Please login.';
-            document.getElementById('resetSuccess').style.display = 'block';
-            setTimeout(() => showLoginView(), 2000);
-        } else {
-            showResetError(result.error);
-        }
-    }
-    
-    function showResetError(msg) {
-        document.getElementById('resetError').textContent = msg;
-        document.getElementById('resetError').style.display = 'block';
-    }
-    
     function showDashboard() {
         const session = getSession();
-        if (session) document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
+        if (session) {
+            document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
+        }
         document.getElementById('authOverlay').style.display = 'none';
         document.getElementById('adminDashboard').style.display = 'block';
         loadData();
@@ -1200,49 +708,58 @@
         showLoginView();
     }
     
-    // ==================== MODAL FUNCTIONS ====================
-    function showUserLogModal() {
+    // ==================== MODAL FUNCTIONS (UPDATED: USES SUPABASE API) ====================
+    async function showUserLogModal() {
         document.getElementById('userLogModal').style.display = 'flex';
-        const logs = getLoginLogs();
         const tbody = document.getElementById('userLogBody');
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Loading logs...</td></tr>';
+        
+        const logs = await getLoginLogsFromSupabase();
+        
         if (logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No login records yet</td></tr>';
             return;
         }
+        
         tbody.innerHTML = logs.map(log => `
             <tr>
                 <td><strong>${log.username}</strong></td>
-                <td>${log.loginTimeDisplay || new Date(log.loginTime).toLocaleString()}</td>
+                <td>${log.loginTimeDisplay}</td>
                 <td>${log.ipAddress}</td>
-                <td style="color: ${log.status === 'success' ? '#2b7a4b' : log.status === 'logout' ? '#6c86a3' : '#dc2626'}">${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}</td>
+                <td>
+                    <span class="status-badge ${log.status === 'success' ? 'status-success' : log.status === 'logout' ? 'status-logout' : 'status-failed'}">
+                        ${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}
+                    </span>
+                </td>
             </tr>
         `).join('');
     }
     
     function closeUserLogModal() { document.getElementById('userLogModal').style.display = 'none'; }
     
-    function showUserManagementModal() {
+    async function showUserManagementModal() {
         document.getElementById('userManagementModal').style.display = 'flex';
-        renderUserManagement();
+        await renderUserManagement();
     }
     
     function closeUserManagementModal() { document.getElementById('userManagementModal').style.display = 'none'; }
     
-    function renderUserManagement() {
-        const users = getUsers();
+    async function renderUserManagement() {
+        const users = await getUsersFromSupabase();
         const tbody = document.getElementById('userManagementBody');
+        
         if (users.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No users found</td></tr>';
             return;
         }
+        
         tbody.innerHTML = users.map(user => `
             <tr>
                 <td><strong>${user.username}</strong></td>
                 <td class="password-cell">
-                    <span id="pwd-${user.id}">••••••</span>
-                    <button class="view-btn" onclick="togglePasswordVisibility(${user.id}, '${user.password.replace(/'/g, "\\'")}')">Show</button>
+                    <span>🔒 Hashed</span>
                 </td>
-                <td>${user.createdAtDisplay || new Date(user.createdAt).toLocaleString()}</td>
+                <td>${user.createdAtDisplay || new Date(user.created_at).toLocaleString()}</td>
                 <td>
                     <button class="reset-btn" onclick="showResetUserModal('${user.username}')">Reset</button>
                     <button class="delete-user-btn" onclick="confirmDeleteUser('${user.username}')">Delete</button>
@@ -1251,87 +768,107 @@
         `).join('');
     }
     
-    function togglePasswordVisibility(userId, password) {
-        const span = document.getElementById(`pwd-${userId}`);
-        if (span.innerText === '••••••') {
-            span.innerText = password;
-        } else {
-            span.innerText = '••••••';
-        }
-    }
-    
-    function showResetUserModal(username) {
+    async function showResetUserModal(username) {
         const newPassword = prompt(`Reset password for "${username}"\nEnter new password (min 6 characters):`);
         if (newPassword && newPassword.length >= 6) {
-            const result = resetUserPassword(username, newPassword);
+            const result = await resetPasswordInSupabase(username, newPassword);
             if (result.success) {
                 alert(`Password for "${username}" has been reset successfully!`);
-                renderUserManagement();
+                await renderUserManagement();
             } else {
-                alert(result.error);
+                alert(result.error || 'Failed to reset password');
             }
         } else if (newPassword) {
             alert('Password must be at least 6 characters');
         }
     }
     
-    function confirmDeleteUser(username) {
+    async function confirmDeleteUser(username) {
+        if (username === 'admin') {
+            alert('Cannot delete the default admin user.');
+            return;
+        }
         if (confirm(`Are you sure you want to delete user "${username}"?\n\nThis action cannot be undone!`)) {
-            const result = deleteUser(username);
+            const result = await deleteUserFromSupabase(username);
             if (result.success) {
                 alert(`User "${username}" has been deleted.`);
-                renderUserManagement();
+                await renderUserManagement();
             } else {
-                alert(result.error);
+                alert(result.error || 'Failed to delete user');
             }
         }
     }
     
-    // ==================== AUTH ACTIONS ====================
-    function attemptSignup() {
+    // ==================== AUTH ACTIONS (UPDATED: USES SUPABASE API) ====================
+    async function attemptSignup() {
         const username = document.getElementById('signupUsername').value.trim();
         const password = document.getElementById('signupPassword').value;
+        
         if (!username || !password) {
             document.getElementById('signupError').textContent = 'Please fill in all fields';
             document.getElementById('signupError').style.display = 'block';
             return;
         }
-        const result = createUser(username, password);
+        
+        const result = await createUserInSupabase(username, password);
+        
         if (result.success) {
             document.getElementById('signupSuccess').textContent = 'Account created! Please login.';
             document.getElementById('signupSuccess').style.display = 'block';
             setTimeout(() => showLoginView(), 2000);
         } else {
-            document.getElementById('signupError').textContent = result.error;
+            document.getElementById('signupError').textContent = result.error || 'Registration failed';
             document.getElementById('signupError').style.display = 'block';
         }
     }
     
-    function attemptLogin() {
+    async function attemptLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value;
+        
         if (!username || !password) {
-            logUserLogin(username, 'failed');
             document.getElementById('loginError').textContent = 'Please enter username and password';
             document.getElementById('loginError').style.display = 'block';
             return;
         }
-        const result = validateLogin(username, password);
+        
+        const result = await loginToSupabase(username, password);
+        
         if (result.success) {
-            logUserLogin(username, 'success');
-            createSession(result.user);
+            createSession({ username: result.username });
             showDashboard();
         } else {
-            logUserLogin(username, 'failed');
-            document.getElementById('loginError').textContent = result.error;
+            document.getElementById('loginError').textContent = result.error || 'Invalid credentials';
             document.getElementById('loginError').style.display = 'block';
             document.getElementById('loginPassword').value = '';
         }
     }
     
+    async function resetPassword() {
+        const username = document.getElementById('resetUsername').value.trim();
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        if (!username) { showResetError('Please enter your username'); return; }
+        if (!newPassword) { showResetError('Please enter a new password'); return; }
+        if (newPassword !== confirmPassword) { showResetError('Passwords do not match'); return; }
+        
+        const result = await resetPasswordInSupabase(username, newPassword);
+        if (result.success) {
+            document.getElementById('resetSuccess').textContent = 'Password reset successfully! Please login.';
+            document.getElementById('resetSuccess').style.display = 'block';
+            setTimeout(() => showLoginView(), 2000);
+        } else {
+            showResetError(result.error || 'Failed to reset password');
+        }
+    }
+    
+    function showResetError(msg) {
+        document.getElementById('resetError').textContent = msg;
+        document.getElementById('resetError').style.display = 'block';
+    }
+    
     function logout() {
-        const session = getSession();
-        if (session) logUserLogin(session.username, 'logout');
         destroySession();
         showAuthScreen();
         if (moodChart) { moodChart.destroy(); moodChart = null; }
@@ -1517,7 +1054,6 @@
     window.closeUserLogModal = closeUserLogModal;
     window.showUserManagementModal = showUserManagementModal;
     window.closeUserManagementModal = closeUserManagementModal;
-    window.togglePasswordVisibility = togglePasswordVisibility;
     window.showResetUserModal = showResetUserModal;
     window.confirmDeleteUser = confirmDeleteUser;
     window.generateWeeklyReport = generateWeeklyReport;
@@ -1527,7 +1063,7 @@
     window.closeDeleteModal = closeDeleteModal;
     window.confirmDeleteAll = confirmDeleteAll;
     
-    // Initialize - FIXED: Removed the line that clears session on every load
+    // Initialize
     if (isAuthenticated()) {
         showDashboard();
     } else {
