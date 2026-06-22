@@ -84,6 +84,7 @@
             margin-top: 16px;
         }
         .auth-btn:hover { background: #0a2e1f; transform: translateY(-2px); }
+        .auth-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
         .switch-auth { margin-top: 20px; font-size: 0.9rem; color: #6c86a3; }
         .switch-auth a { color: #1b4d2e; text-decoration: none; font-weight: 600; cursor: pointer; }
         .error-msg { color: #dc2626; font-size: 0.8rem; margin-top: 10px; display: none; background: #fee2e2; padding: 10px; border-radius: 30px; }
@@ -338,7 +339,6 @@
         }
         .generate-report-btn:hover { background: #0891b2; }
         
-        /* Recent Activity Section */
         .recent-activity {
             background: white;
             border-radius: 28px;
@@ -402,8 +402,8 @@
             background: white;
             border-radius: 32px;
             padding: 30px;
-            max-width: 500px;
-            width: 90%;
+            max-width: 700px;
+            width: 95%;
             max-height: 85vh;
             overflow-y: auto;
             text-align: center;
@@ -488,6 +488,38 @@
         }
         .delete-user-btn:hover { background: #b91c1c; }
         .warning-text { color: #dc2626; font-size: 12px; margin-top: 10px; }
+        .password-cell { font-family: monospace; font-size: 14px; }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1b4d2e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .add-user-section {
+            margin: 15px 0 10px 0;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 16px;
+            border: 1px dashed #cbd5e1;
+        }
+        .add-user-section input {
+            padding: 10px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 30px;
+            font-size: 14px;
+            width: 100%;
+            max-width: 250px;
+        }
+        .add-user-section input:focus { outline: none; border-color: #2d6a4f; }
         
         @media (max-width: 768px) { 
             .stats-grid { grid-template-columns: 1fr; }
@@ -495,6 +527,8 @@
             .admin-dashboard { padding: 1rem; }
             .filter-panel { flex-direction: column; align-items: stretch; }
             .recent-activity-header { flex-direction: column; align-items: stretch; }
+            .admin-header > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+            .admin-header > div:last-child button { margin-left: 0; }
         }
     </style>
 </head>
@@ -525,7 +559,7 @@
         <div class="auth-icon"><i class="fas fa-user-plus"></i></div>
         <h2>Create Account</h2>
         <p style="color: #6c86a3; margin-bottom: 20px;">Sign up to access SafiCheck Admin</p>
-        <input type="text" id="signupUsername" placeholder="Username" autocomplete="off">
+        <input type="text" id="signupUsername" placeholder="Username (3-30 chars, letters, numbers, underscore)" autocomplete="off">
         <div class="password-container">
             <input type="password" id="signupPassword" placeholder="Password (min 6 characters)">
             <i class="fas fa-eye toggle-password" onclick="togglePassword('signupPassword', this)"></i>
@@ -570,7 +604,11 @@
         <div style="overflow-x: auto;">
             <table class="user-table">
                 <thead><tr><th>User</th><th>Login Time</th><th>IP</th><th>Status</th></tr></thead>
-                <tbody id="userLogBody"></tbody>
+                <tbody id="userLogBody">
+                    <tr><td colspan="4" style="text-align: center; padding: 20px;">
+                        <div class="loading-spinner"></div> Loading logs...
+                    </td></tr>
+                </tbody>
             </table>
         </div>
     </div>
@@ -583,12 +621,32 @@
             <h2><i class="fas fa-users-cog"></i> User Management</h2>
             <button class="close-modal" onclick="closeUserManagementModal()">&times;</button>
         </div>
+        
+        <!-- Add User Section -->
+        <div class="add-user-section">
+            <h4 style="margin-bottom: 10px; color: #1f4d2e;"><i class="fas fa-user-plus"></i> Add New User</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+                <input type="text" id="newUsername" placeholder="Username" style="flex:1; min-width:150px;">
+                <div class="password-container" style="flex:1; min-width:150px; margin:0;">
+                    <input type="password" id="newUserPassword" placeholder="Password" style="width:100%; padding:10px 18px; padding-right:40px; border:2px solid #e2e8f0; border-radius:30px;">
+                    <i class="fas fa-eye toggle-password" onclick="togglePassword('newUserPassword', this)" style="right:12px;"></i>
+                </div>
+                <button class="auth-btn" onclick="addNewUser()" style="width:auto; padding:10px 25px; margin:0;"><i class="fas fa-check"></i> Create</button>
+            </div>
+            <div id="addUserError" class="error-msg" style="margin-top:8px;"></div>
+            <div id="addUserSuccess" class="success-msg" style="margin-top:8px;"></div>
+        </div>
+        
         <div style="overflow-x: auto;">
             <table class="password-table">
                 <thead>
-                    <tr><th>Username</th><th>Password (Visible to Admin)</th><th>Created At</th><th>Actions</th></tr>
+                    <tr><th>Username</th><th>Created At</th><th>Actions</th></tr>
                 </thead>
-                <tbody id="userManagementBody"></tbody>
+                <tbody id="userManagementBody">
+                    <tr><td colspan="3" style="text-align: center; padding: 20px;">
+                        <div class="loading-spinner"></div> Loading users...
+                    </td></tr>
+                </tbody>
             </table>
         </div>
         <div class="warning-text">
@@ -728,6 +786,96 @@
 </div>
 
 <script>
+    // ==================== SESSION MANAGEMENT (USING BACKEND) ====================
+    let currentUser = null;
+    let feedbackData = [];
+    let currentFilter = 'all';
+    let isFiltered = false;
+    let currentFilteredData = null;
+    let moodChart = null;
+    
+    // ==================== API HELPER FUNCTIONS ====================
+    async function apiCall(endpoint, method = 'GET', body = null) {
+        const options = {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        };
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
+        try {
+            const response = await fetch(endpoint, options);
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error(`API call failed: ${endpoint}`, error);
+            throw error;
+        }
+    }
+    
+    // ==================== USER MANAGEMENT (BACKEND) ====================
+    async function getUsers() {
+        try {
+            const users = await apiCall('/api/users');
+            return users;
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            return [];
+        }
+    }
+    
+    async function createUserBackend(username, password) {
+        try {
+            const result = await apiCall('/api/register', 'POST', { username, password });
+            return result;
+        } catch (error) {
+            console.error('Error creating user:', error);
+            return { success: false, error: 'Server error' };
+        }
+    }
+    
+    async function resetUserPasswordBackend(username, newPassword) {
+        try {
+            const result = await apiCall('/api/reset-password', 'POST', { username, new_password: newPassword });
+            return result;
+        } catch (error) {
+            console.error('Error resetting password:', error);
+            return { success: false, error: 'Server error' };
+        }
+    }
+    
+    async function deleteUserBackend(username) {
+        try {
+            const result = await apiCall('/api/delete-user', 'POST', { username });
+            return result;
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            return { success: false, error: 'Server error' };
+        }
+    }
+    
+    async function getLoginLogsBackend() {
+        try {
+            const logs = await apiCall('/api/login-logs');
+            return logs;
+        } catch (error) {
+            console.error('Error fetching login logs:', error);
+            return [];
+        }
+    }
+    
+    async function loginBackend(username, password) {
+        try {
+            const result = await apiCall('/api/login', 'POST', { username, password });
+            return result;
+        } catch (error) {
+            console.error('Login error:', error);
+            return { success: false, error: 'Server error' };
+        }
+    }
+    
     // ==================== WEEKLY REPORT CONSTANTS ====================
     const WEEKLY_REPORT_KEY = 'saficheck_weekly_report';
     const LAST_REPORT_WEEK_KEY = 'saficheck_last_report_week';
@@ -765,7 +913,6 @@
     async function confirmDelete() {
         try {
             if (deleteTargetAll) {
-                // Delete all entries
                 for (const item of feedbackData) {
                     await fetch('/api/feedback', {
                         method: 'DELETE',
@@ -802,7 +949,6 @@
         };
     }
     
-    // ==================== WEEK NUMBER HELPER ====================
     function getWeekNumber(date) {
         const d = new Date(date);
         d.setHours(0,0,0,0);
@@ -811,7 +957,6 @@
         return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
     }
     
-    // ==================== SINGLE SOURCE OF TRUTH FOR FILTERING ====================
     function getActiveData() {
         let data = isFiltered && currentFilteredData ? currentFilteredData : feedbackData;
         if (currentFilter !== 'all') {
@@ -820,7 +965,6 @@
         return data;
     }
     
-    // ==================== SATISFACTION CALCULATION ====================
     function calculateSatisfaction(data) {
         const total = data.length;
         let up = 0;
@@ -843,10 +987,6 @@
             satisfaction
         };
     }
-    
-    // ==================== APPLY DATE FILTER ====================
-    let currentFilteredData = null;
-    let isFiltered = false;
     
     function applyDateFilter() {
         const start = document.getElementById("startDate").value;
@@ -877,7 +1017,6 @@
         updateDashboardWithStats();
     }
     
-    // ==================== FILTER FUNCTION ====================
     function filterByDateRange(data, startDate, endDate) {
         const start = new Date(startDate);
         const end = new Date(endDate);
@@ -889,7 +1028,6 @@
         });
     }
     
-    // ==================== UPDATE DASHBOARD WITH STATS ====================
     function updateDashboardWithStats() {
         const activeData = getActiveData();
         const stats = calculateSatisfaction(activeData);
@@ -913,7 +1051,6 @@
         renderDashboard(activeData);
     }
     
-    // ==================== AI SUMMARY ENGINE ====================
     function generateAIAnalysis(dataSet, weekLabel = "Current Week") {
         if (!dataSet.length) {
             return "📊 No feedback data available for this period.";
@@ -957,13 +1094,11 @@
         return summary;
     }
     
-    // ==================== WEEKLY DATA FUNCTION ====================
     function getCurrentWeekData() {
         const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
         return feedbackData.filter(item => new Date(item.timestamp).getTime() >= oneWeekAgo);
     }
     
-    // ==================== GENERATE WEEKLY REPORT ====================
     function generateWeeklyReport() {
         const weekData = getCurrentWeekData();
         const report = generateAIAnalysis(weekData, "This Week");
@@ -973,7 +1108,6 @@
         return report;
     }
     
-    // ==================== DISPLAY WEEKLY REPORT ====================
     function renderWeeklyReport() {
         const report = localStorage.getItem(WEEKLY_REPORT_KEY);
         const reportDate = localStorage.getItem(LAST_REPORT_WEEK_KEY);
@@ -994,7 +1128,6 @@
         `;
     }
     
-    // ==================== THURSDAY AUTO-GENERATION ====================
     function scheduleThursdayAutoReport() {
         const today = new Date();
         const day = today.getDay();
@@ -1012,7 +1145,6 @@
         }
     }
     
-    // ==================== PASSWORD TOGGLE ====================
     function togglePassword(fieldId, iconElement) {
         const passwordField = document.getElementById(fieldId);
         if (passwordField.type === 'password') {
@@ -1026,112 +1158,125 @@
         }
     }
     
-    // ==================== USER MANAGEMENT ====================
-    const USERS_KEY = 'saficheck_users';
-    const SESSION_KEY = 'saficheck_session';
-    const LOGIN_LOGS_KEY = 'saficheck_login_logs';
-    
-    function logUserLogin(username, status, ip = 'local') {
-        const logs = getLoginLogs();
-        const timestamp = getCurrentTimestamp();
-        logs.unshift({ 
-            id: Date.now(), 
-            username, 
-            loginTime: timestamp.iso,
-            loginTimeDisplay: timestamp.full,
-            ipAddress: ip, 
-            status 
-        });
-        while (logs.length > 100) logs.pop();
-        localStorage.setItem(LOGIN_LOGS_KEY, JSON.stringify(logs));
-    }
-    
-    function getLoginLogs() {
-        const logs = localStorage.getItem(LOGIN_LOGS_KEY);
-        return logs ? JSON.parse(logs) : [];
-    }
-    
-    function getUsers() {
-        const users = localStorage.getItem(USERS_KEY);
-        if (!users) {
-            const defaultUsers = [{ id: 1, username: 'admin', password: 'admin123', createdAt: new Date().toISOString(), createdAtDisplay: getCurrentTimestamp().full }];
-            saveUsers(defaultUsers);
-            return defaultUsers;
-        }
-        return JSON.parse(users);
-    }
-    
-    function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
-    
-    function findUserByUsername(username) { return getUsers().find(u => u.username === username); }
-    
-    function createUser(username, password) {
-        if (findUserByUsername(username)) return { success: false, error: "Username already taken" };
-        if (username.length < 3) return { success: false, error: "Username must be at least 3 characters" };
-        if (password.length < 6) return { success: false, error: "Password must be at least 6 characters" };
+    // ==================== AUTH ACTIONS (BACKEND) ====================
+    async function attemptSignup() {
+        const username = document.getElementById('signupUsername').value.trim();
+        const password = document.getElementById('signupPassword').value;
+        const errorEl = document.getElementById('signupError');
+        const successEl = document.getElementById('signupSuccess');
         
-        const users = getUsers();
-        const timestamp = getCurrentTimestamp();
-        users.push({ 
-            id: Date.now(), 
-            username, 
-            password, 
-            createdAt: timestamp.iso,
-            createdAtDisplay: timestamp.full
-        });
-        saveUsers(users);
-        return { success: true };
-    }
-    
-    function resetUserPassword(username, newPassword) {
-        if (newPassword.length < 6) return { success: false, error: "Password must be at least 6 characters" };
-        
-        const users = getUsers();
-        const userIndex = users.findIndex(u => u.username === username);
-        if (userIndex === -1) return { success: false, error: "User not found" };
-        
-        users[userIndex].password = newPassword;
-        saveUsers(users);
-        return { success: true };
-    }
-    
-    function deleteUser(username) {
-        const users = getUsers();
-        const session = getSession();
-        
-        if (session && session.username === username) {
-            return { success: false, error: "You cannot delete your own account while logged in" };
+        if (!username || !password) {
+            errorEl.textContent = 'Please fill in all fields';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return;
         }
         
-        const userIndex = users.findIndex(u => u.username === username);
-        if (userIndex === -1) return { success: false, error: "User not found" };
+        if (username.length < 3) {
+            errorEl.textContent = 'Username must be at least 3 characters';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return;
+        }
         
-        users.splice(userIndex, 1);
-        saveUsers(users);
-        return { success: true };
+        if (password.length < 6) {
+            errorEl.textContent = 'Password must be at least 6 characters';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return;
+        }
+        
+        const result = await createUserBackend(username, password);
+        if (result.success) {
+            successEl.textContent = 'Account created! Please login.';
+            successEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            setTimeout(() => showLoginView(), 2000);
+        } else {
+            errorEl.textContent = result.error || 'Failed to create account';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+        }
     }
     
-    function validateLogin(username, password) {
-        const user = findUserByUsername(username);
-        if (user && user.password === password) return { success: true, user };
-        return { success: false, error: "Invalid username or password" };
+    async function attemptLogin() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const errorEl = document.getElementById('loginError');
+        
+        if (!username || !password) {
+            errorEl.textContent = 'Please enter username and password';
+            errorEl.style.display = 'block';
+            return;
+        }
+        
+        const result = await loginBackend(username, password);
+        if (result.success) {
+            currentUser = result.username;
+            sessionStorage.setItem('saficheck_session', JSON.stringify({ 
+                username: result.username,
+                timestamp: Date.now()
+            }));
+            showDashboard();
+        } else {
+            errorEl.textContent = result.error || 'Invalid credentials';
+            errorEl.style.display = 'block';
+            document.getElementById('loginPassword').value = '';
+        }
     }
     
-    function createSession(user) {
-        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id, username: user.username, expiresAt: Date.now() + (8 * 60 * 60 * 1000) }));
-        return getSession();
+    function logout() {
+        currentUser = null;
+        sessionStorage.removeItem('saficheck_session');
+        showAuthScreen();
+        if (moodChart) { moodChart.destroy(); moodChart = null; }
     }
     
-    function getSession() {
-        const session = localStorage.getItem(SESSION_KEY);
-        if (!session) return null;
-        const parsed = JSON.parse(session);
-        if (parsed.expiresAt < Date.now()) { localStorage.removeItem(SESSION_KEY); return null; }
-        return parsed;
+    function resetPassword() {
+        const username = document.getElementById('resetUsername').value.trim();
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const errorEl = document.getElementById('resetError');
+        const successEl = document.getElementById('resetSuccess');
+        
+        if (!username) { 
+            errorEl.textContent = 'Please enter your username';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return; 
+        }
+        if (!newPassword) { 
+            errorEl.textContent = 'Please enter a new password';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return; 
+        }
+        if (newPassword !== confirmPassword) { 
+            errorEl.textContent = 'Passwords do not match';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return; 
+        }
+        if (newPassword.length < 6) {
+            errorEl.textContent = 'Password must be at least 6 characters';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return;
+        }
+        
+        resetUserPasswordBackend(username, newPassword).then(result => {
+            if (result.success) {
+                successEl.textContent = 'Password reset successfully! Please login.';
+                successEl.style.display = 'block';
+                errorEl.style.display = 'none';
+                setTimeout(() => showLoginView(), 2000);
+            } else {
+                errorEl.textContent = result.error || 'Failed to reset password';
+                errorEl.style.display = 'block';
+                successEl.style.display = 'none';
+            }
+        });
     }
-    
-    function destroySession() { localStorage.removeItem(SESSION_KEY); }
-    function isAuthenticated() { return getSession() !== null; }
     
     // ==================== UI VIEWS ====================
     function showSignupView() {
@@ -1140,6 +1285,8 @@
         document.getElementById('forgotPasswordView').style.display = 'none';
         document.getElementById('signupError').style.display = 'none';
         document.getElementById('signupSuccess').style.display = 'none';
+        document.getElementById('signupUsername').value = '';
+        document.getElementById('signupPassword').value = '';
     }
     
     function showLoginView() {
@@ -1162,35 +1309,10 @@
         document.getElementById('confirmPassword').value = '';
     }
     
-    function resetPassword() {
-        const username = document.getElementById('resetUsername').value.trim();
-        const newPassword = document.getElementById('newPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        
-        if (!username) { showResetError('Please enter your username'); return; }
-        if (!newPassword) { showResetError('Please enter a new password'); return; }
-        if (newPassword !== confirmPassword) { showResetError('Passwords do not match'); return; }
-        
-        const result = resetUserPassword(username, newPassword);
-        if (result.success) {
-            document.getElementById('resetSuccess').textContent = 'Password reset successfully! Please login.';
-            document.getElementById('resetSuccess').style.display = 'block';
-            setTimeout(() => showLoginView(), 2000);
-        } else {
-            showResetError(result.error);
-        }
-    }
-    
-    function showResetError(msg) {
-        document.getElementById('resetError').textContent = msg;
-        document.getElementById('resetError').style.display = 'block';
-    }
-    
     function showDashboard() {
-        const session = getSession();
-        if (session) document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
         document.getElementById('authOverlay').style.display = 'none';
         document.getElementById('adminDashboard').style.display = 'block';
+        document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${currentUser}`;
         loadData();
     }
     
@@ -1201,149 +1323,143 @@
     }
     
     // ==================== MODAL FUNCTIONS ====================
-    function showUserLogModal() {
+    async function showUserLogModal() {
         document.getElementById('userLogModal').style.display = 'flex';
-        const logs = getLoginLogs();
         const tbody = document.getElementById('userLogBody');
-        if (logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No login records yet</td></tr>';
-            return;
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;"><div class="loading-spinner"></div> Loading logs...</td></tr>';
+        
+        try {
+            const logs = await getLoginLogsBackend();
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No login records yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = logs.map(log => `
+                <tr>
+                    <td><strong>${log.username || 'Unknown'}</strong></td>
+                    <td>${log.loginTimeDisplay || 'N/A'}</td>
+                    <td>${log.ipAddress || 'N/A'}</td>
+                    <td style="color: ${log.status === 'success' ? '#2b7a4b' : log.status === 'logout' ? '#6c86a3' : '#dc2626'}">
+                        ${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}
+                    </td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc2626;">Error loading logs</td></tr>';
         }
-        tbody.innerHTML = logs.map(log => `
-            <tr>
-                <td><strong>${log.username}</strong></td>
-                <td>${log.loginTimeDisplay || new Date(log.loginTime).toLocaleString()}</td>
-                <td>${log.ipAddress}</td>
-                <td style="color: ${log.status === 'success' ? '#2b7a4b' : log.status === 'logout' ? '#6c86a3' : '#dc2626'}">${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}</td>
-            </tr>
-        `).join('');
     }
     
     function closeUserLogModal() { document.getElementById('userLogModal').style.display = 'none'; }
     
-    function showUserManagementModal() {
+    async function showUserManagementModal() {
         document.getElementById('userManagementModal').style.display = 'flex';
-        renderUserManagement();
+        await renderUserManagement();
     }
     
     function closeUserManagementModal() { document.getElementById('userManagementModal').style.display = 'none'; }
     
-    function renderUserManagement() {
-        const users = getUsers();
+    async function renderUserManagement() {
         const tbody = document.getElementById('userManagementBody');
-        if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No users found</td></tr>';
-            return;
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;"><div class="loading-spinner"></div> Loading users...</td></tr>';
+        
+        try {
+            const users = await getUsers();
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No users found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = users.map(user => {
+                const isCurrentUser = user.username === currentUser;
+                const isAdmin = user.username === 'admin';
+                return `
+                    <tr>
+                        <td><strong>${user.username}</strong> ${isCurrentUser ? '👤' : ''} ${isAdmin ? '👑' : ''}</td>
+                        <td>${user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'}</td>
+                        <td>
+                            <button class="reset-btn" onclick="showResetUserModal('${user.username}')">Reset Password</button>
+                            ${!isAdmin ? `<button class="delete-user-btn" onclick="confirmDeleteUser('${user.username}')">Delete</button>` : ''}
+                            ${isAdmin ? '<span style="font-size:11px; color:#6c86a3;">(Protected)</span>' : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #dc2626;">Error loading users</td></tr>';
         }
-        tbody.innerHTML = users.map(user => `
-            <tr>
-                <td><strong>${user.username}</strong></td>
-                <td class="password-cell">
-                    <span id="pwd-${user.id}">••••••</span>
-                    <button class="view-btn" onclick="togglePasswordVisibility(${user.id}, '${user.password.replace(/'/g, "\\'")}')">Show</button>
-                </td>
-                <td>${user.createdAtDisplay || new Date(user.createdAt).toLocaleString()}</td>
-                <td>
-                    <button class="reset-btn" onclick="showResetUserModal('${user.username}')">Reset</button>
-                    <button class="delete-user-btn" onclick="confirmDeleteUser('${user.username}')">Delete</button>
-                </td>
-            </tr>
-        `).join('');
     }
     
-    function togglePasswordVisibility(userId, password) {
-        const span = document.getElementById(`pwd-${userId}`);
-        if (span.innerText === '••••••') {
-            span.innerText = password;
-        } else {
-            span.innerText = '••••••';
-        }
-    }
-    
-    function showResetUserModal(username) {
+    async function showResetUserModal(username) {
         const newPassword = prompt(`Reset password for "${username}"\nEnter new password (min 6 characters):`);
         if (newPassword && newPassword.length >= 6) {
-            const result = resetUserPassword(username, newPassword);
+            const result = await resetUserPasswordBackend(username, newPassword);
             if (result.success) {
                 alert(`Password for "${username}" has been reset successfully!`);
-                renderUserManagement();
+                await renderUserManagement();
             } else {
-                alert(result.error);
+                alert(result.error || 'Failed to reset password');
             }
         } else if (newPassword) {
             alert('Password must be at least 6 characters');
         }
     }
     
-    function confirmDeleteUser(username) {
+    async function confirmDeleteUser(username) {
         if (confirm(`Are you sure you want to delete user "${username}"?\n\nThis action cannot be undone!`)) {
-            const result = deleteUser(username);
+            const result = await deleteUserBackend(username);
             if (result.success) {
                 alert(`User "${username}" has been deleted.`);
-                renderUserManagement();
+                await renderUserManagement();
             } else {
-                alert(result.error);
+                alert(result.error || 'Failed to delete user');
             }
         }
     }
     
-    // ==================== AUTH ACTIONS ====================
-    function attemptSignup() {
-        const username = document.getElementById('signupUsername').value.trim();
-        const password = document.getElementById('signupPassword').value;
+    async function addNewUser() {
+        const username = document.getElementById('newUsername').value.trim();
+        const password = document.getElementById('newUserPassword').value;
+        const errorEl = document.getElementById('addUserError');
+        const successEl = document.getElementById('addUserSuccess');
+        
         if (!username || !password) {
-            document.getElementById('signupError').textContent = 'Please fill in all fields';
-            document.getElementById('signupError').style.display = 'block';
+            errorEl.textContent = 'Please enter username and password';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
             return;
         }
-        const result = createUser(username, password);
-        if (result.success) {
-            document.getElementById('signupSuccess').textContent = 'Account created! Please login.';
-            document.getElementById('signupSuccess').style.display = 'block';
-            setTimeout(() => showLoginView(), 2000);
-        } else {
-            document.getElementById('signupError').textContent = result.error;
-            document.getElementById('signupError').style.display = 'block';
-        }
-    }
-    
-    function attemptLogin() {
-        const username = document.getElementById('loginUsername').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        if (!username || !password) {
-            logUserLogin(username, 'failed');
-            document.getElementById('loginError').textContent = 'Please enter username and password';
-            document.getElementById('loginError').style.display = 'block';
+        
+        if (username.length < 3) {
+            errorEl.textContent = 'Username must be at least 3 characters';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
             return;
         }
-        const result = validateLogin(username, password);
-        if (result.success) {
-            logUserLogin(username, 'success');
-            createSession(result.user);
-            showDashboard();
-        } else {
-            logUserLogin(username, 'failed');
-            document.getElementById('loginError').textContent = result.error;
-            document.getElementById('loginError').style.display = 'block';
-            document.getElementById('loginPassword').value = '';
+        
+        if (password.length < 6) {
+            errorEl.textContent = 'Password must be at least 6 characters';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            return;
         }
-    }
-    
-    function logout() {
-        const session = getSession();
-        if (session) logUserLogin(session.username, 'logout');
-        destroySession();
-        showAuthScreen();
-        if (moodChart) { moodChart.destroy(); moodChart = null; }
+        
+        const result = await createUserBackend(username, password);
+        if (result.success) {
+            successEl.textContent = `User "${username}" created successfully!`;
+            successEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newUserPassword').value = '';
+            await renderUserManagement();
+            setTimeout(() => { successEl.style.display = 'none'; }, 3000);
+        } else {
+            errorEl.textContent = result.error || 'Failed to create user';
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+        }
     }
     
     // ==================== DASHBOARD FUNCTIONS ====================
-    let feedbackData = [];
-    let currentFilter = 'all';
-    let moodChart = null;
-    
     async function loadData() {
-        if (!isAuthenticated()) return;
         try {
             const response = await fetch('/api/feedback');
             feedbackData = await response.json();
@@ -1351,7 +1467,11 @@
             updateDashboardWithStats();
             renderWeeklyReport();
             scheduleThursdayAutoReport();
-        } catch (error) { console.error('Error loading data:', error); }
+        } catch (error) { 
+            console.error('Error loading data:', error);
+            // Show error in UI
+            document.getElementById('recentList').innerHTML = '<div class="empty-state" style="color:#dc2626;">⚠️ Error loading data. Please refresh.</div>';
+        }
     }
     
     function renderDashboard(activeData) {
@@ -1501,7 +1621,29 @@
         URL.revokeObjectURL(a.href);
     }
     
-    // Make global
+    // ==================== INITIALIZATION ====================
+    function init() {
+        // Check for existing session
+        const sessionData = sessionStorage.getItem('saficheck_session');
+        if (sessionData) {
+            try {
+                const session = JSON.parse(sessionData);
+                // Check if session is still valid (24 hours)
+                if (session.timestamp && (Date.now() - session.timestamp) < 24 * 60 * 60 * 1000) {
+                    currentUser = session.username;
+                    showDashboard();
+                    return;
+                } else {
+                    sessionStorage.removeItem('saficheck_session');
+                }
+            } catch (e) {
+                sessionStorage.removeItem('saficheck_session');
+            }
+        }
+        showAuthScreen();
+    }
+    
+    // Make functions global
     window.setFilter = setFilter;
     window.loadData = loadData;
     window.exportToCSV = exportToCSV;
@@ -1517,9 +1659,9 @@
     window.closeUserLogModal = closeUserLogModal;
     window.showUserManagementModal = showUserManagementModal;
     window.closeUserManagementModal = closeUserManagementModal;
-    window.togglePasswordVisibility = togglePasswordVisibility;
     window.showResetUserModal = showResetUserModal;
     window.confirmDeleteUser = confirmDeleteUser;
+    window.addNewUser = addNewUser;
     window.generateWeeklyReport = generateWeeklyReport;
     window.applyDateFilter = applyDateFilter;
     window.resetDateFilter = resetDateFilter;
@@ -1527,14 +1669,13 @@
     window.closeDeleteModal = closeDeleteModal;
     window.confirmDeleteAll = confirmDeleteAll;
     
-    // Initialize - FIXED: Removed the line that clears session on every load
-    if (isAuthenticated()) {
-        showDashboard();
-    } else {
-        showAuthScreen();
-    }
+    // Start app
+    init();
     
-    setInterval(() => { if (isAuthenticated() && document.visibilityState === 'visible') loadData(); }, 15000);
+    // Auto-refresh every 30 seconds
+    setInterval(() => { 
+        if (currentUser) loadData(); 
+    }, 30000);
 </script>
 </body>
 </html>
