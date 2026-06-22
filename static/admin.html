@@ -1026,112 +1026,107 @@
         }
     }
     
-    // ==================== USER MANAGEMENT (UPDATED: USES SUPABASE API) ====================
+    // ==================== USER MANAGEMENT ====================
+    const USERS_KEY = 'saficheck_users';
     const SESSION_KEY = 'saficheck_session';
+    const LOGIN_LOGS_KEY = 'saficheck_login_logs';
     
-    // ==================== SUPABASE API CALLS ====================
-    async function getUsersFromSupabase() {
-        try {
-            const response = await fetch('/api/users');
-            if (!response.ok) {
-                throw new Error('Failed to fetch users');
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching users:', error);
-            return [];
-        }
+    function logUserLogin(username, status, ip = 'local') {
+        const logs = getLoginLogs();
+        const timestamp = getCurrentTimestamp();
+        logs.unshift({ 
+            id: Date.now(), 
+            username, 
+            loginTime: timestamp.iso,
+            loginTimeDisplay: timestamp.full,
+            ipAddress: ip, 
+            status 
+        });
+        while (logs.length > 100) logs.pop();
+        localStorage.setItem(LOGIN_LOGS_KEY, JSON.stringify(logs));
     }
     
-    async function getLoginLogsFromSupabase() {
-        try {
-            const response = await fetch('/api/login-logs');
-            if (!response.ok) {
-                throw new Error('Failed to fetch login logs');
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching login logs:', error);
-            return [];
-        }
+    function getLoginLogs() {
+        const logs = localStorage.getItem(LOGIN_LOGS_KEY);
+        return logs ? JSON.parse(logs) : [];
     }
     
-    async function createUserInSupabase(username, password) {
-        try {
-            const response = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('Error creating user:', error);
-            return { success: false, error: 'Network error' };
+    function getUsers() {
+        const users = localStorage.getItem(USERS_KEY);
+        if (!users) {
+            const defaultUsers = [{ id: 1, username: 'admin', password: 'admin123', createdAt: new Date().toISOString(), createdAtDisplay: getCurrentTimestamp().full }];
+            saveUsers(defaultUsers);
+            return defaultUsers;
         }
+        return JSON.parse(users);
     }
     
-    async function resetPasswordInSupabase(username, newPassword) {
-        try {
-            const response = await fetch('/api/reset-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, new_password: newPassword })
-            });
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('Error resetting password:', error);
-            return { success: false, error: 'Network error' };
-        }
+    function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+    
+    function findUserByUsername(username) { return getUsers().find(u => u.username === username); }
+    
+    function createUser(username, password) {
+        if (findUserByUsername(username)) return { success: false, error: "Username already taken" };
+        if (username.length < 3) return { success: false, error: "Username must be at least 3 characters" };
+        if (password.length < 6) return { success: false, error: "Password must be at least 6 characters" };
+        
+        const users = getUsers();
+        const timestamp = getCurrentTimestamp();
+        users.push({ 
+            id: Date.now(), 
+            username, 
+            password, 
+            createdAt: timestamp.iso,
+            createdAtDisplay: timestamp.full
+        });
+        saveUsers(users);
+        return { success: true };
     }
     
-    async function deleteUserFromSupabase(username) {
-        try {
-            const response = await fetch('/api/delete-user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
-            });
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('Error deleting user:', error);
-            return { success: false, error: 'Network error' };
-        }
+    function resetUserPassword(username, newPassword) {
+        if (newPassword.length < 6) return { success: false, error: "Password must be at least 6 characters" };
+        
+        const users = getUsers();
+        const userIndex = users.findIndex(u => u.username === username);
+        if (userIndex === -1) return { success: false, error: "User not found" };
+        
+        users[userIndex].password = newPassword;
+        saveUsers(users);
+        return { success: true };
     }
     
-    async function loginToSupabase(username, password) {
-        try {
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('Error logging in:', error);
-            return { success: false, error: 'Network error' };
+    function deleteUser(username) {
+        const users = getUsers();
+        const session = getSession();
+        
+        if (session && session.username === username) {
+            return { success: false, error: "You cannot delete your own account while logged in" };
         }
+        
+        const userIndex = users.findIndex(u => u.username === username);
+        if (userIndex === -1) return { success: false, error: "User not found" };
+        
+        users.splice(userIndex, 1);
+        saveUsers(users);
+        return { success: true };
     }
     
-    // ==================== SESSION MANAGEMENT ====================
+    function validateLogin(username, password) {
+        const user = findUserByUsername(username);
+        if (user && user.password === password) return { success: true, user };
+        return { success: false, error: "Invalid username or password" };
+    }
+    
     function createSession(user) {
-        localStorage.setItem(SESSION_KEY, JSON.stringify({ 
-            username: user.username, 
-            expiresAt: Date.now() + (8 * 60 * 60 * 1000) 
-        }));
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id, username: user.username, expiresAt: Date.now() + (8 * 60 * 60 * 1000) }));
+        return getSession();
     }
     
     function getSession() {
         const session = localStorage.getItem(SESSION_KEY);
         if (!session) return null;
         const parsed = JSON.parse(session);
-        if (parsed.expiresAt < Date.now()) {
-            localStorage.removeItem(SESSION_KEY);
-            return null;
-        }
+        if (parsed.expiresAt < Date.now()) { localStorage.removeItem(SESSION_KEY); return null; }
         return parsed;
     }
     
@@ -1167,11 +1162,33 @@
         document.getElementById('confirmPassword').value = '';
     }
     
+    function resetPassword() {
+        const username = document.getElementById('resetUsername').value.trim();
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        if (!username) { showResetError('Please enter your username'); return; }
+        if (!newPassword) { showResetError('Please enter a new password'); return; }
+        if (newPassword !== confirmPassword) { showResetError('Passwords do not match'); return; }
+        
+        const result = resetUserPassword(username, newPassword);
+        if (result.success) {
+            document.getElementById('resetSuccess').textContent = 'Password reset successfully! Please login.';
+            document.getElementById('resetSuccess').style.display = 'block';
+            setTimeout(() => showLoginView(), 2000);
+        } else {
+            showResetError(result.error);
+        }
+    }
+    
+    function showResetError(msg) {
+        document.getElementById('resetError').textContent = msg;
+        document.getElementById('resetError').style.display = 'block';
+    }
+    
     function showDashboard() {
         const session = getSession();
-        if (session) {
-            document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
-        }
+        if (session) document.getElementById('sessionUser').innerHTML = `<i class="fas fa-user-check"></i> ${session.username}`;
         document.getElementById('authOverlay').style.display = 'none';
         document.getElementById('adminDashboard').style.display = 'block';
         loadData();
@@ -1183,56 +1200,49 @@
         showLoginView();
     }
     
-    // ==================== UPDATED MODAL FUNCTIONS (USE SUPABASE API) ====================
-    async function showUserLogModal() {
+    // ==================== MODAL FUNCTIONS ====================
+    function showUserLogModal() {
         document.getElementById('userLogModal').style.display = 'flex';
+        const logs = getLoginLogs();
         const tbody = document.getElementById('userLogBody');
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Loading logs...</td></tr>';
-        
-        const logs = await getLoginLogsFromSupabase();
-        
         if (logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No login records yet</td></tr>';
             return;
         }
-        
         tbody.innerHTML = logs.map(log => `
             <tr>
                 <td><strong>${log.username}</strong></td>
-                <td>${log.loginTimeDisplay}</td>
+                <td>${log.loginTimeDisplay || new Date(log.loginTime).toLocaleString()}</td>
                 <td>${log.ipAddress}</td>
-                <td style="color: ${log.status === 'success' ? '#2b7a4b' : log.status === 'logout' ? '#6c86a3' : '#dc2626'}">
-                    ${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}
-                </td>
+                <td style="color: ${log.status === 'success' ? '#2b7a4b' : log.status === 'logout' ? '#6c86a3' : '#dc2626'}">${log.status === 'success' ? '✅ Success' : log.status === 'logout' ? '🚪 Logout' : '❌ Failed'}</td>
             </tr>
         `).join('');
     }
     
     function closeUserLogModal() { document.getElementById('userLogModal').style.display = 'none'; }
     
-    async function showUserManagementModal() {
+    function showUserManagementModal() {
         document.getElementById('userManagementModal').style.display = 'flex';
-        await renderUserManagement();
+        renderUserManagement();
     }
     
     function closeUserManagementModal() { document.getElementById('userManagementModal').style.display = 'none'; }
     
-    async function renderUserManagement() {
-        const users = await getUsersFromSupabase();
+    function renderUserManagement() {
+        const users = getUsers();
         const tbody = document.getElementById('userManagementBody');
-        
         if (users.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No users found</td></tr>';
             return;
         }
-        
         tbody.innerHTML = users.map(user => `
             <tr>
                 <td><strong>${user.username}</strong></td>
                 <td class="password-cell">
-                    <span>🔒 Hashed</span>
+                    <span id="pwd-${user.id}">••••••</span>
+                    <button class="view-btn" onclick="togglePasswordVisibility(${user.id}, '${user.password.replace(/'/g, "\\'")}')">Show</button>
                 </td>
-                <td>${user.createdAtDisplay || new Date(user.created_at).toLocaleString()}</td>
+                <td>${user.createdAtDisplay || new Date(user.createdAt).toLocaleString()}</td>
                 <td>
                     <button class="reset-btn" onclick="showResetUserModal('${user.username}')">Reset</button>
                     <button class="delete-user-btn" onclick="confirmDeleteUser('${user.username}')">Delete</button>
@@ -1241,107 +1251,87 @@
         `).join('');
     }
     
-    async function showResetUserModal(username) {
+    function togglePasswordVisibility(userId, password) {
+        const span = document.getElementById(`pwd-${userId}`);
+        if (span.innerText === '••••••') {
+            span.innerText = password;
+        } else {
+            span.innerText = '••••••';
+        }
+    }
+    
+    function showResetUserModal(username) {
         const newPassword = prompt(`Reset password for "${username}"\nEnter new password (min 6 characters):`);
         if (newPassword && newPassword.length >= 6) {
-            const result = await resetPasswordInSupabase(username, newPassword);
+            const result = resetUserPassword(username, newPassword);
             if (result.success) {
                 alert(`Password for "${username}" has been reset successfully!`);
-                await renderUserManagement();
+                renderUserManagement();
             } else {
-                alert(result.error || 'Failed to reset password');
+                alert(result.error);
             }
         } else if (newPassword) {
             alert('Password must be at least 6 characters');
         }
     }
     
-    async function confirmDeleteUser(username) {
-        if (username === 'admin') {
-            alert('Cannot delete the default admin user.');
-            return;
-        }
+    function confirmDeleteUser(username) {
         if (confirm(`Are you sure you want to delete user "${username}"?\n\nThis action cannot be undone!`)) {
-            const result = await deleteUserFromSupabase(username);
+            const result = deleteUser(username);
             if (result.success) {
                 alert(`User "${username}" has been deleted.`);
-                await renderUserManagement();
+                renderUserManagement();
             } else {
-                alert(result.error || 'Failed to delete user');
+                alert(result.error);
             }
         }
     }
     
-    // ==================== UPDATED AUTH ACTIONS (USE SUPABASE API) ====================
-    async function attemptSignup() {
+    // ==================== AUTH ACTIONS ====================
+    function attemptSignup() {
         const username = document.getElementById('signupUsername').value.trim();
         const password = document.getElementById('signupPassword').value;
-        
         if (!username || !password) {
             document.getElementById('signupError').textContent = 'Please fill in all fields';
             document.getElementById('signupError').style.display = 'block';
             return;
         }
-        
-        const result = await createUserInSupabase(username, password);
-        
+        const result = createUser(username, password);
         if (result.success) {
             document.getElementById('signupSuccess').textContent = 'Account created! Please login.';
             document.getElementById('signupSuccess').style.display = 'block';
             setTimeout(() => showLoginView(), 2000);
         } else {
-            document.getElementById('signupError').textContent = result.error || 'Registration failed';
+            document.getElementById('signupError').textContent = result.error;
             document.getElementById('signupError').style.display = 'block';
         }
     }
     
-    async function attemptLogin() {
+    function attemptLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value;
-        
         if (!username || !password) {
+            logUserLogin(username, 'failed');
             document.getElementById('loginError').textContent = 'Please enter username and password';
             document.getElementById('loginError').style.display = 'block';
             return;
         }
-        
-        const result = await loginToSupabase(username, password);
-        
+        const result = validateLogin(username, password);
         if (result.success) {
-            createSession({ username: result.username });
+            logUserLogin(username, 'success');
+            createSession(result.user);
             showDashboard();
         } else {
-            document.getElementById('loginError').textContent = result.error || 'Invalid credentials';
+            logUserLogin(username, 'failed');
+            document.getElementById('loginError').textContent = result.error;
             document.getElementById('loginError').style.display = 'block';
             document.getElementById('loginPassword').value = '';
         }
     }
     
-    async function resetPassword() {
-        const username = document.getElementById('resetUsername').value.trim();
-        const newPassword = document.getElementById('newPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        
-        if (!username) { showResetError('Please enter your username'); return; }
-        if (!newPassword) { showResetError('Please enter a new password'); return; }
-        if (newPassword !== confirmPassword) { showResetError('Passwords do not match'); return; }
-        
-        const result = await resetPasswordInSupabase(username, newPassword);
-        if (result.success) {
-            document.getElementById('resetSuccess').textContent = 'Password reset successfully! Please login.';
-            document.getElementById('resetSuccess').style.display = 'block';
-            setTimeout(() => showLoginView(), 2000);
-        } else {
-            showResetError(result.error || 'Failed to reset password');
-        }
-    }
-    
-    function showResetError(msg) {
-        document.getElementById('resetError').textContent = msg;
-        document.getElementById('resetError').style.display = 'block';
-    }
-    
     function logout() {
+        const session = getSession();
+        if (session) logUserLogin(session.username, 'logout');
         destroySession();
         showAuthScreen();
         if (moodChart) { moodChart.destroy(); moodChart = null; }
@@ -1527,6 +1517,7 @@
     window.closeUserLogModal = closeUserLogModal;
     window.showUserManagementModal = showUserManagementModal;
     window.closeUserManagementModal = closeUserManagementModal;
+    window.togglePasswordVisibility = togglePasswordVisibility;
     window.showResetUserModal = showResetUserModal;
     window.confirmDeleteUser = confirmDeleteUser;
     window.generateWeeklyReport = generateWeeklyReport;
