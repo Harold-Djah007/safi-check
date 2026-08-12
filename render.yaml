@@ -24,3 +24,6 @@ services:
         sync: false
       - key: MOCK_MODE
         value: True
+            envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
