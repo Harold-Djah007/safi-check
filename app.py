@@ -576,5 +576,6 @@ if __name__ == '__main__':
     logger.info(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
     logger.info("=" * 60)
     
+    # Start the app - bind to PORT environment variable
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
