@@ -14,6 +14,8 @@ services:
       pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: DB_SERVER
         value: safisanadb.database.windows.net
       - key: DB_NAME
@@ -24,6 +26,3 @@ services:
         sync: false
       - key: MOCK_MODE
         value: True
-            envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
