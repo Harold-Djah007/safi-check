@@ -9,9 +9,12 @@ services:
       curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
       curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
       apt-get update
-      ACCEPT_EULA=Y apt-get install -y msodbcsql18
+      ACCEPT_EULA=Y apt-get install -y msodbcsql17
       pip install --upgrade pip
       pip install -r requirements.txt
+    preDeployCommand: |
+      apt-get update
+      ACCEPT_EULA=Y apt-get install -y msodbcsql17
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
