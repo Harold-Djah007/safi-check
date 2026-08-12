@@ -5,9 +5,7 @@ import os
 import requests
 import threading
 import time
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2.pool import SimpleConnectionPool
+import pyodbc
 from werkzeug.security import generate_password_hash, check_password_hash
 import atexit
 import re
@@ -15,30 +13,177 @@ import sys
 
 app = Flask(__name__)
 
-# ==================== DATABASE CONNECTION POOL ====================
-db_pool = None
-
-def init_db_pool():
-    """Initialize PostgreSQL connection pool"""
-    global db_pool
-    database_url = os.environ.get('DATABASE_URL')
-    if not database_url:
-        raise Exception("DATABASE_URL environment variable is required. Please set it in Render.")
-    
-    db_pool = SimpleConnectionPool(1, 10, database_url)
-    print("✅ PostgreSQL connection pool initialized (min=1, max=10)")
-    return db_pool
+# ==================== AZURE SQL DATABASE CONNECTION ====================
 
 def get_db_connection():
-    """Get a connection from the pool"""
-    if db_pool is None:
-        init_db_pool()
-    return db_pool.getconn()
+    """Get connection to Azure SQL Database"""
+    # Get connection details from environment variables
+    server = os.environ.get('DB_SERVER', 'safisanadb.database.windows.net')
+    database = os.environ.get('DB_NAME', 'safidb')
+    username = os.environ.get('DB_USERNAME', '')
+    password = os.environ.get('DB_PASSWORD', '')
+    
+    # Validate required environment variables
+    if not username or not password:
+        print("❌ ERROR: DB_USERNAME and DB_PASSWORD environment variables are required!")
+        print("Please set them in Render Dashboard -> Environment Variables")
+        raise Exception("Database credentials not configured")
+    
+    # Build connection string
+    connection_string = (
+        f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+        f'SERVER={server};'
+        f'DATABASE={database};'
+        f'UID={username};'
+        f'PWD={password};'
+        f'Encrypt=yes;'
+        f'TrustServerCertificate=no;'
+        f'Connection Timeout=30;'
+    )
+    
+    try:
+        conn = pyodbc.connect(connection_string)
+        print(f"✅ Connected to Azure SQL Database: {database}")
+        return conn
+    except Exception as e:
+        print(f"❌ Database connection error: {e}")
+        print(f"Server: {server}")
+        print(f"Database: {database}")
+        print(f"Username: {username}")
+        raise
 
-def return_db_connection(conn):
-    """Return connection to the pool"""
-    if db_pool and conn:
-        db_pool.putconn(conn)
+def init_db():
+    """Initialize Azure SQL Database tables"""
+    conn = None
+    try:
+        print("🔄 Initializing database tables...")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Create users table
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='users' AND xtype='U')
+            CREATE TABLE users (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                username NVARCHAR(100) UNIQUE,
+                password_hash NVARCHAR(MAX),
+                created_at DATETIME
+            )
+        """)
+        print("✅ Users table ready")
+
+        # Create checkins table
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='checkins' AND xtype='U')
+            CREATE TABLE checkins (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                mood NVARCHAR(MAX),
+                comments NVARCHAR(MAX),
+                submission_date DATETIME,
+                ip_address NVARCHAR(100),
+                location NVARCHAR(100)
+            )
+        """)
+        print("✅ Checkins table ready")
+
+        # Create checkin_issues table
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='checkin_issues' AND xtype='U')
+            CREATE TABLE checkin_issues (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                checkin_id INT,
+                issue NVARCHAR(MAX),
+                FOREIGN KEY (checkin_id) REFERENCES checkins(id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Checkin issues table ready")
+
+        # Create login_logs table
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='login_logs' AND xtype='U')
+            CREATE TABLE login_logs (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                username NVARCHAR(100),
+                login_time DATETIME,
+                ip_address NVARCHAR(100),
+                status NVARCHAR(50),
+                user_agent NVARCHAR(MAX)
+            )
+        """)
+        print("✅ Login logs table ready")
+
+        # Create notification_numbers table
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='notification_numbers' AND xtype='U')
+            CREATE TABLE notification_numbers (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                phone_number NVARCHAR(50) UNIQUE,
+                name NVARCHAR(100),
+                country NVARCHAR(50),
+                is_active BIT DEFAULT 1,
+                created_at DATETIME
+            )
+        """)
+        print("✅ Notification numbers table ready")
+
+        # Create sms_logs table
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='sms_logs' AND xtype='U')
+            CREATE TABLE sms_logs (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                sent_at DATETIME,
+                recipients INT,
+                successful INT,
+                status NVARCHAR(50),
+                message NVARCHAR(MAX)
+            )
+        """)
+        print("✅ SMS logs table ready")
+
+        # Create indexes
+        try:
+            cursor.execute("""
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='idx_checkins_date')
+                CREATE INDEX idx_checkins_date ON checkins(submission_date)
+            """)
+        except:
+            pass  # Index might already exist
+        
+        try:
+            cursor.execute("""
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='idx_checkins_location')
+                CREATE INDEX idx_checkins_location ON checkins(location)
+            """)
+        except:
+            pass
+
+        # Check if admin exists, if not create
+        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        if not cursor.fetchone():
+            hashed_password = generate_password_hash('admin123')
+            cursor.execute("""
+                INSERT INTO users (username, password_hash, created_at)
+                VALUES (?, ?, ?)
+            """, ('admin', hashed_password, datetime.now()))
+            print("✅ Created admin user with hashed password")
+        else:
+            # Update admin password to ensure it's properly hashed
+            hashed_password = generate_password_hash('admin123')
+            cursor.execute("""
+                UPDATE users SET password_hash = ? WHERE username = 'admin'
+            """, (hashed_password,))
+            print("✅ Updated admin password hash")
+
+        conn.commit()
+        print("✅ Azure SQL Database initialized successfully")
+    except Exception as e:
+        print(f"❌ Database initialization error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 # ==================== WHATSAPP CONFIGURATION ====================
 WHATSAPP_TOKEN = os.environ.get('WHATSAPP_TOKEN', '')
@@ -60,14 +205,10 @@ WHATSAPP_HEADERS = {
 }
 
 print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
-print(f"📱 Phone Number ID: {PHONE_NUMBER_ID}")
-print(f"📱 Token starts with: {WHATSAPP_TOKEN[:20]}...")
-print(f"📱 API URL: {WHATSAPP_API_URL}")
 
 # ==================== send_whatsapp_message ====================
 def send_whatsapp_message(phone_number, message):
     """Send WhatsApp message using Meta Cloud API - digits ONLY, NO + sign"""
-    # Clean to digits only - NO + sign
     phone_number = re.sub(r'[^0-9]', '', str(phone_number))
     
     if MOCK_MODE:
@@ -79,7 +220,7 @@ def send_whatsapp_message(phone_number, message):
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
-            "to": phone_number,  # MUST be digits only - NO + sign
+            "to": phone_number,
             "type": "text",
             "text": {
                 "preview_url": False,
@@ -88,28 +229,16 @@ def send_whatsapp_message(phone_number, message):
         }
         
         print(f"📤 Sending WhatsApp message to: {phone_number}")
-        print(f"📤 Payload: {json.dumps(payload, indent=2)}")
         sys.stdout.flush()
         
         response = requests.post(WHATSAPP_API_URL, headers=WHATSAPP_HEADERS, json=payload)
         
-        try:
-            data = response.json()
-            print("FULL RESPONSE:", json.dumps(data, indent=2))
+        if response.status_code in [200, 201]:
+            print(f"✅ WhatsApp message sent successfully to {phone_number}")
             sys.stdout.flush()
-            
-            if response.status_code in [200, 201]:
-                print(f"✅ WhatsApp message sent successfully to {phone_number}")
-                sys.stdout.flush()
-                return True
-            else:
-                print(f"❌ FAILED WHATSAPP: {data}")
-                sys.stdout.flush()
-                return False
-                
-        except Exception as e:
-            print(f"❌ JSON parse error: {e}")
-            print(f"Raw response: {response.text}")
+            return True
+        else:
+            print(f"❌ FAILED WHATSAPP: {response.text}")
             sys.stdout.flush()
             return False
             
@@ -118,195 +247,421 @@ def send_whatsapp_message(phone_number, message):
         sys.stdout.flush()
         return False
 
-# ==================== DATABASE SETUP ====================
+# ==================== ROUTES ====================
 
-def init_db():
-    """Initialize PostgreSQL database tables"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS checkins (
-                id SERIAL PRIMARY KEY,
-                mood TEXT,
-                comments TEXT,
-                submission_date TIMESTAMP,
-                ip_address TEXT,
-                location TEXT
-            )
-        """)
+@app.route('/admin')
+def admin_dashboard():
+    return send_from_directory('static', 'admin.html')
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS checkin_issues (
-                id SERIAL PRIMARY KEY,
-                checkin_id INTEGER REFERENCES checkins(id) ON DELETE CASCADE,
-                issue TEXT
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS alerts (
-                id SERIAL PRIMARY KEY,
-                checkin_id INTEGER REFERENCES checkins(id) ON DELETE CASCADE,
-                keyword TEXT,
-                severity TEXT,
-                details TEXT,
-                acknowledged BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE,
-                password_hash TEXT,
-                created_at TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS notification_numbers (
-                id SERIAL PRIMARY KEY,
-                phone_number TEXT UNIQUE,
-                name TEXT,
-                country TEXT,
-                is_active BOOLEAN DEFAULT TRUE,
-                created_at TIMESTAMP
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sms_logs (
-                id SERIAL PRIMARY KEY,
-                sent_at TIMESTAMP,
-                recipients INTEGER,
-                successful INTEGER,
-                status TEXT,
-                message TEXT
-            )
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS login_logs (
-                id SERIAL PRIMARY KEY,
-                username TEXT,
-                login_time TIMESTAMP,
-                ip_address TEXT,
-                status TEXT,
-                user_agent TEXT
-            )
-        """)
-
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkins_date ON checkins(submission_date)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_checkin ON alerts(checkin_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkins_location ON checkins(location)")
-
-        # Check if admin exists, if not create with proper hashed password
-        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
-        if not cursor.fetchone():
-            hashed_password = generate_password_hash('admin123')
-            cursor.execute("""
-                INSERT INTO users (username, password_hash, created_at)
-                VALUES (%s, %s, %s)
-            """, ('admin', hashed_password, datetime.now()))
-            print("✅ Created admin user with hashed password")
-        else:
-            # Update admin password to ensure it's properly hashed
-            hashed_password = generate_password_hash('admin123')
-            cursor.execute("""
-                UPDATE users SET password_hash = %s WHERE username = 'admin'
-            """, (hashed_password,))
-            print("✅ Updated admin password hash")
-
-        conn.commit()
-        print("✅ PostgreSQL database initialized")
-    except Exception as e:
-        print(f"❌ Database initialization error: {e}")
-        raise
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-def insert_test_numbers():
-    """Automatically add test phone numbers to database on startup"""
+@app.route('/api/feedback', methods=['GET'])
+def get_feedback():
+    """API endpoint for admin dashboard - returns all feedback"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        test_numbers = [
-            ('233550157210', 'Ghana Number 1', 'Ghana', True),
-            ('233506896041', 'Ghana Number 2', 'Ghana', True),
-            ('15556664486', 'Meta Test Number', 'USA', True),
-        ]
+        cursor.execute("SELECT * FROM checkins ORDER BY submission_date DESC")
+        rows = cursor.fetchall()
         
-        for number, name, country, active in test_numbers:
-            cursor.execute("""
-                INSERT INTO notification_numbers (phone_number, name, country, is_active, created_at)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (phone_number) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    country = EXCLUDED.country,
-                    is_active = EXCLUDED.is_active
-            """, (number, name, country, active, datetime.utcnow()))
-        
-        conn.commit()
-        print(f"✅ Seeded {len(test_numbers)} test number(s)")
-    except Exception as e:
-        print(f"❌ Failed to seed database: {e}")
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-# Initialize database
-init_db_pool()
-init_db()
-insert_test_numbers()
-
-# ==================== SCHEDULER LOCK ====================
-class SchedulerLock:
-    def __init__(self):
-        self.lock_acquired = False
-        self.conn = None
-        self.cursor = None
-        self._lock_held = False
-    
-    def acquire(self):
-        try:
-            self.conn = get_db_connection()
-            self.cursor = self.conn.cursor()
-            self.cursor.execute("SELECT pg_try_advisory_lock(12345)")
-            self.lock_acquired = self.cursor.fetchone()[0]
-            if self.lock_acquired:
-                self._lock_held = True
-                print("✅ Scheduler lock acquired")
+        feedback = []
+        for row in rows:
+            # Get issues for this checkin
+            cursor.execute("SELECT issue FROM checkin_issues WHERE checkin_id = ?", (row[0],))
+            issues = [r[0] for r in cursor.fetchall()]
+            
+            mood = row[1] or ''
+            if 'Thumbs Up' in mood or '👍' in mood:
+                rating = 'good'
+                mood_score = 8
             else:
-                print("⚠️ Scheduler lock already held by another instance")
-            return self.lock_acquired
-        except Exception as e:
-            print(f"❌ Failed to acquire scheduler lock: {e}")
-            return False
-    
-    def release(self):
-        if self._lock_held and self.cursor:
-            try:
-                self.cursor.execute("SELECT pg_advisory_unlock(12345)")
-                self.conn.commit()
-                self._lock_held = False
-                print("✅ Scheduler lock released")
-            except Exception as e:
-                print(f"❌ Failed to release scheduler lock: {e}")
-            finally:
-                if self.conn:
-                    return_db_connection(self.conn)
-                    self.conn = None
-                    self.cursor = None
-        self.lock_acquired = False
+                rating = 'bad'
+                mood_score = 3
+            
+            dt_obj = row[3]
+            display_timestamp = dt_obj.strftime('%m/%d/%Y, %I:%M:%S %p') if dt_obj else ''
+            day = dt_obj.strftime('%A') if dt_obj else ''
+            
+            feedback.append({
+                'id': row[0],
+                'location': row[5] or 'Ashaiman',
+                'rating': rating,
+                'moodScore': mood_score,
+                'comment': row[2] or '',
+                'ip': row[4] or '127.0.0.1',
+                'redFlags': [],
+                'timestamp': dt_obj.isoformat() if dt_obj else '',
+                'timestampDisplay': display_timestamp,
+                'day': day,
+                'issues': issues,
+                'hasRedFlag': False
+            })
+        
+        print(f"📊 API returning {len(feedback)} feedback entries")
+        return jsonify(feedback)
+    except Exception as e:
+        print(f"❌ Error in get_feedback: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
-# ==================== WHATSAPP SCHEDULER ====================
+@app.route('/api/feedback', methods=['DELETE'])
+def delete_feedback():
+    data = request.get_json()
+    feedback_id = data.get('id')
+    
+    if not feedback_id:
+        return jsonify({'success': False, 'error': 'No ID provided'}), 400
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM checkins WHERE id = ?", (feedback_id,))
+        conn.commit()
+        print(f"🗑️ Deleted feedback ID: {feedback_id}")
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"❌ Error deleting feedback: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/submit', methods=['POST'])
+def submit():
+    conn = None
+    try:
+        mood = request.form.get('mood')
+        location = request.form.get('location') or 'Ashaiman'
+        issues_list = request.form.getlist('issues')
+        comments = request.form.get('comments', '').strip()
+        
+        if not mood:
+            return jsonify({'success': False, 'error': 'Please select your mood'}), 400
+        
+        ip_address = request.remote_addr
+        current_time = datetime.now().replace(microsecond=0)
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO checkins (mood, comments, submission_date, ip_address, location)
+            VALUES (?, ?, ?, ?, ?)
+        """, (mood, comments, current_time, ip_address, location))
+        
+        # Get the inserted ID
+        cursor.execute("SELECT SCOPE_IDENTITY()")
+        checkin_id = cursor.fetchone()[0]
+        
+        for issue in issues_list:
+            cursor.execute("""
+                INSERT INTO checkin_issues (checkin_id, issue)
+                VALUES (?, ?)
+            """, (checkin_id, issue))
+        
+        conn.commit()
+        
+        print(f"✅ Saved: Mood={mood}, Location={location}, Issues={issues_list}, IP={ip_address}")
+        return jsonify({'success': True, 'alerts': []})
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ==================== WHATSAPP ENDPOINTS ====================
+
+@app.route('/api/notification-numbers', methods=['GET'])
+def get_notification_numbers():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM notification_numbers ORDER BY country, name")
+        rows = cursor.fetchall()
+        
+        numbers = []
+        for row in rows:
+            numbers.append({
+                'id': row[0],
+                'phone_number': row[1],
+                'name': row[2],
+                'country': row[3],
+                'is_active': bool(row[4]),
+                'created_at': row[5].isoformat() if row[5] else None
+            })
+        return jsonify(numbers)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/notification-numbers', methods=['POST'])
+def add_notification_number():
+    data = request.get_json()
+    phone_number = data.get('phone_number')
+    name = data.get('name', '')
+    country = data.get('country', 'Other')
+    
+    if not phone_number:
+        return jsonify({'success': False, 'error': 'Phone number required'}), 400
+    
+    phone_number = re.sub(r'[^0-9]', '', str(phone_number))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO notification_numbers (phone_number, name, country, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (phone_number, name, country, datetime.utcnow()))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+    finally:
+        if conn:
+            conn.close()
+
+# ==================== USER AUTHENTICATION ====================
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    ip_address = request.remote_addr
+    
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password required'}), 400
+    
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
+        
+        if user:
+            password_hash = user[2]
+            is_valid = False
+            
+            try:
+                if password_hash:
+                    is_valid = check_password_hash(password_hash, password)
+                    print(f"🔐 Password verification for {username}: {'SUCCESS' if is_valid else 'FAILED'}")
+            except Exception as e:
+                print(f"❌ Password check error: {e}")
+                is_valid = False
+            
+            if is_valid:
+                cursor.execute("""
+                    INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (username, datetime.utcnow(), ip_address, 'success', user_agent))
+                conn.commit()
+                return jsonify({'success': True, 'username': username})
+        
+        cursor.execute("""
+            INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
+            VALUES (?, ?, ?, ?, ?)
+        """, (username, datetime.utcnow(), ip_address, 'failed', user_agent))
+        conn.commit()
+        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+        
+    except Exception as e:
+        print(f"❌ Login error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'Server error'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password required'}), 400
+    
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        return jsonify({'success': False, 'error': 'Username must be 3-30 characters (letters, numbers, underscore)'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
+    
+    hashed_password = generate_password_hash(password)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO users (username, password_hash, created_at)
+            VALUES (?, ?, ?)
+        """, (username, hashed_password, datetime.now()))
+        conn.commit()
+        print(f"✅ User registered: {username}")
+        return jsonify({'success': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ Registration error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/reset-password', methods=['POST'])
+def api_reset_password():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    new_password = data.get('new_password', '')
+    
+    if not username or not new_password:
+        return jsonify({'success': False, 'error': 'Username and new password required'}), 400
+    
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
+    
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
+    
+    hashed_password = generate_password_hash(new_password)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (hashed_password, username))
+        conn.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        print(f"✅ Password reset for: {username}")
+        return jsonify({'success': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ Password reset error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/users', methods=['GET'])
+def api_get_users():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, created_at FROM users ORDER BY id")
+        rows = cursor.fetchall()
+        
+        users = []
+        for row in rows:
+            users.append({
+                'id': row[0],
+                'username': row[1],
+                'created_at': row[2].isoformat() if row[2] else None
+            })
+        return jsonify(users)
+    except Exception as e:
+        print(f"❌ Error fetching users: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/delete-user', methods=['POST'])
+def api_delete_user():
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    
+    if not username:
+        return jsonify({'success': False, 'error': 'Username required'}), 400
+    
+    if username == 'admin':
+        return jsonify({'success': False, 'error': 'Cannot delete default admin user'}), 400
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE username = ?", (username,))
+        conn.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        print(f"🗑️ Deleted user: {username}")
+        return jsonify({'success': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ Delete user error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/login-logs', methods=['GET'])
+def api_get_login_logs():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT TOP 200 * FROM login_logs ORDER BY login_time DESC")
+        rows = cursor.fetchall()
+        
+        formatted_logs = []
+        for row in rows:
+            formatted_logs.append({
+                'id': row[0],
+                'username': row[1],
+                'loginTimeDisplay': row[2].strftime('%m/%d/%Y, %I:%M:%S %p') if row[2] else '',
+                'ipAddress': row[3],
+                'status': row[4],
+                'userAgent': row[5][:50] if row[5] else 'Unknown'
+            })
+        
+        return jsonify(formatted_logs)
+    except Exception as e:
+        print(f"❌ Error fetching login logs: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ==================== SCHEDULER (Simplified for Azure) ====================
 
 class NotificationScheduler:
     def __init__(self):
@@ -314,7 +669,6 @@ class NotificationScheduler:
         self.running = True
         self.target_hour_utc = 14
         self.target_minute = 0
-        self.lock = None
         self.is_scheduler_active = False
     
     def get_active_numbers(self):
@@ -322,15 +676,16 @@ class NotificationScheduler:
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT phone_number, name, country FROM notification_numbers WHERE is_active = TRUE")
-            numbers = [{'number': row[0], 'name': row[1], 'country': row[2]} for row in cursor.fetchall()]
+            cursor.execute("SELECT phone_number, name, country FROM notification_numbers WHERE is_active = 1")
+            rows = cursor.fetchall()
+            numbers = [{'number': row[0], 'name': row[1], 'country': row[2]} for row in rows]
             return numbers
         except Exception as e:
             print(f"❌ Error getting active numbers: {e}")
             return []
         finally:
             if conn:
-                return_db_connection(conn)
+                conn.close()
     
     def check_and_send(self):
         now = datetime.utcnow()
@@ -377,7 +732,7 @@ class NotificationScheduler:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO sms_logs (sent_at, recipients, successful, status, message)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             """, (datetime.utcnow(), total_count, success_count, 
                   'success' if success_count > 0 else 'failed',
                   f"Sent {success_count}/{total_count} successfully via WhatsApp"))
@@ -386,634 +741,40 @@ class NotificationScheduler:
             print(f"❌ Failed to log notification: {e}")
         finally:
             if conn:
-                return_db_connection(conn)
+                conn.close()
     
     def start(self):
-        self.lock = SchedulerLock()
-        
-        if not self.lock.acquire():
-            print("⚠️ Scheduler already running on another instance. Skipping...")
-            return False
-        
         self.is_scheduler_active = True
         print(f"⏰ WhatsApp Scheduler started - Will send at {self.target_hour_utc}:{self.target_minute:02d} UTC daily")
         print(f"📱 Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
         
         while self.running:
             self.check_and_send()
-            time.sleep(30)
+            time.sleep(60)
         
         return True
     
     def stop(self):
         self.running = False
-        if self.lock:
-            self.lock.release()
         self.is_scheduler_active = False
 
-# ==================== ROUTES ====================
+# ==================== STARTUP ====================
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# Initialize database
+try:
+    init_db()
+except Exception as e:
+    print(f"❌ Failed to initialize database: {e}")
+    print("⚠️ Continuing startup...")
 
-@app.route('/admin')
-def admin_dashboard():
-    return send_from_directory('static', 'admin.html')
-
-@app.route('/api/feedback', methods=['GET'])
-def get_feedback():
-    """API endpoint for admin dashboard - returns all feedback with red flags"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cursor.execute("SELECT * FROM checkins ORDER BY submission_date DESC")
-        rows = cursor.fetchall()
-        
-        feedback = []
-        for row in rows:
-            cursor.execute("SELECT issue FROM checkin_issues WHERE checkin_id = %s", (row['id'],))
-            issues = [r[0] for r in cursor.fetchall()]
-            
-            mood = row['mood'] or ''
-            if 'Thumbs Up' in mood or '👍' in mood:
-                rating = 'good'
-                mood_score = 8
-            else:
-                rating = 'bad'
-                mood_score = 3
-            
-            dt_obj = row['submission_date']
-            display_timestamp = dt_obj.strftime('%m/%d/%Y, %I:%M:%S %p') if dt_obj else ''
-            day = dt_obj.strftime('%A') if dt_obj else ''
-            
-            feedback.append({
-                'id': row['id'],
-                'location': row['location'] or 'Ashaiman',
-                'rating': rating,
-                'moodScore': mood_score,
-                'comment': row['comments'] or '',
-                'ip': row['ip_address'] or '127.0.0.1',
-                'redFlags': [],
-                'timestamp': dt_obj.isoformat() if dt_obj else '',
-                'timestampDisplay': display_timestamp,
-                'day': day,
-                'issues': issues,
-                'hasRedFlag': False
-            })
-        
-        print(f"📊 API returning {len(feedback)} feedback entries")
-        return jsonify(feedback)
-    except Exception as e:
-        print(f"❌ Error in get_feedback: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/feedback', methods=['DELETE'])
-def delete_feedback():
-    data = request.get_json()
-    feedback_id = data.get('id')
-    
-    if not feedback_id:
-        return jsonify({'success': False, 'error': 'No ID provided'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM checkins WHERE id = %s", (feedback_id,))
-        conn.commit()
-        print(f"🗑️ Deleted feedback ID: {feedback_id}")
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"❌ Error deleting feedback: {e}")
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/submit', methods=['POST'])
-def submit():
-    conn = None
-    try:
-        mood = request.form.get('mood')
-        location = request.form.get('location') or 'Ashaiman'
-        issues_list = request.form.getlist('issues')
-        comments = request.form.get('comments', '').strip()
-        
-        if not mood:
-            return jsonify({'success': False, 'error': 'Please select your mood'}), 400
-        
-        ip_address = request.remote_addr
-        current_time = datetime.now().replace(microsecond=0)
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO checkins (mood, comments, submission_date, ip_address, location)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
-        """, (mood, comments, current_time, ip_address, location))
-        
-        row = cursor.fetchone()
-        checkin_id = row[0]
-        
-        for issue in issues_list:
-            cursor.execute("""
-                INSERT INTO checkin_issues (checkin_id, issue)
-                VALUES (%s, %s)
-            """, (checkin_id, issue))
-        
-        conn.commit()
-        
-        print(f"✅ Saved: Mood={mood}, Location={location}, Issues={issues_list}, IP={ip_address}")
-        return jsonify({'success': True, 'alerts': []})
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-# ==================== WHATSAPP ENDPOINTS ====================
-
-@app.route('/api/notification-numbers', methods=['GET'])
-def get_notification_numbers():
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM notification_numbers ORDER BY country, name")
-        numbers = cursor.fetchall()
-        return jsonify(numbers)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/notification-numbers', methods=['POST'])
-def add_notification_number():
-    data = request.get_json()
-    phone_number = data.get('phone_number')
-    name = data.get('name', '')
-    country = data.get('country', 'Other')
-    
-    if not phone_number:
-        return jsonify({'success': False, 'error': 'Phone number required'}), 400
-    
-    # Clean phone number: digits only
-    phone_number = re.sub(r'[^0-9]', '', str(phone_number))
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO notification_numbers (phone_number, name, country, created_at)
-            VALUES (%s, %s, %s, %s)
-        """, (phone_number, name, country, datetime.utcnow()))
-        conn.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/scheduler-status', methods=['GET'])
-def get_scheduler_status():
-    now = datetime.utcnow()
-    next_run = datetime(now.year, now.month, now.day, 14, 0, 0)
-    if now.hour >= 14 and now.minute >= 0:
-        next_run = next_run.replace(day=next_run.day + 1)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM notification_numbers WHERE is_active = TRUE")
-        active_count = cursor.fetchone()[0]
-        
-        return jsonify({
-            'scheduler_running': scheduler.is_scheduler_active,
-            'target_hour_utc': 14,
-            'target_minute_utc': 0,
-            'next_run_utc': next_run.isoformat(),
-            'active_recipients': active_count,
-            'mode': 'MOCK' if MOCK_MODE else 'LIVE'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/trigger-whatsapp')
-def trigger_whatsapp():
-    """Manually trigger WhatsApp notifications"""
-    try:
-        scheduler.send_notifications()
-        return jsonify({
-            'status': 'sent',
-            'message': 'WhatsApp notifications triggered successfully',
-            'mode': 'LIVE' if not MOCK_MODE else 'MOCK',
-            'recipients': len(scheduler.get_active_numbers())
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'error': str(e)
-        }), 500
-
-@app.route('/api/test-whatsapp', methods=['GET'])
-def test_whatsapp():
-    phone = request.args.get('phone')
-
-    if not phone:
-        return jsonify({'error': 'Provide ?phone=233XXXXXXXXX'}), 400
-
-    # Clean: digits only
-    phone = re.sub(r'[^0-9]', '', str(phone))
-
-    print(f"🧪 Test endpoint called for phone: {phone}")
-    sys.stdout.flush()
-
-    result = send_whatsapp_message(
-        phone,
-        "🧪 Test message from SafiCheck! Your WhatsApp integration is working. 🎉"
-    )
-
-    return jsonify({
-        'success': result,
-        'phone': phone,
-        'mode': 'LIVE' if not MOCK_MODE else 'MOCK'
-    })
-
-# ==================== GOOGLE SHEETS INTEGRATION ====================
-@app.route('/api/send-from-sheet', methods=['POST'])
-def send_from_sheet():
-    """Endpoint for Google Sheets to trigger WhatsApp messages"""
-    try:
-        data = request.get_json()
-        phone = data.get("phone")
-
-        if not phone:
-            return jsonify({"error": "No phone provided"}), 400
-
-        # Clean: digits only
-        phone = re.sub(r'[^0-9]', '', str(phone))
-
-        message = "⏰ SafiCheck Reminder: Please complete your check-in: https://safi-check.onrender.com"
-
-        print(f"📤 Sending from Google Sheets to: {phone}")
-        sys.stdout.flush()
-
-        success = send_whatsapp_message(phone, message)
-
-        return jsonify({
-            "success": success,
-            "phone": phone
-        })
-
-    except Exception as e:
-        print(f"❌ Error in send-from-sheet: {e}")
-        sys.stdout.flush()
-        return jsonify({"error": str(e)}), 500
-
-# ==================== FIXED: USER AUTHENTICATION ====================
-
-@app.route('/api/login', methods=['POST'])
-def api_login():
-    """Login endpoint with proper password verification"""
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    user_agent = request.headers.get('User-Agent', 'Unknown')
-    ip_address = request.remote_addr
-    
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Username and password required'}), 400
-    
-    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
-        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Get user from database
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
-        
-        if user:
-            password_hash = user['password_hash']
-            is_valid = False
-            
-            # Try to verify with check_password_hash
-            try:
-                if password_hash:
-                    is_valid = check_password_hash(password_hash, password)
-                    print(f"🔐 Password verification for {username}: {'SUCCESS' if is_valid else 'FAILED'}")
-            except Exception as e:
-                print(f"❌ Password check error: {e}")
-                is_valid = False
-            
-            if is_valid:
-                # Log successful login
-                cursor.execute("""
-                    INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (username, datetime.utcnow(), ip_address, 'success', user_agent))
-                conn.commit()
-                return jsonify({'success': True, 'username': username})
-        
-        # Log failed login
-        cursor.execute("""
-            INSERT INTO login_logs (username, login_time, ip_address, status, user_agent)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (username, datetime.utcnow(), ip_address, 'failed', user_agent))
-        conn.commit()
-        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
-        
-    except Exception as e:
-        print(f"❌ Login error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': 'Server error'}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/register', methods=['POST'])
-def api_register():
-    """Register a new user with hashed password"""
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    
-    if not username or not password:
-        return jsonify({'success': False, 'error': 'Username and password required'}), 400
-    
-    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
-        return jsonify({'success': False, 'error': 'Username must be 3-30 characters (letters, numbers, underscore)'}), 400
-    
-    if len(password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
-    
-    # Hash the password
-    hashed_password = generate_password_hash(password)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO users (username, password_hash, created_at)
-            VALUES (%s, %s, %s)
-        """, (username, hashed_password, datetime.now()))
-        conn.commit()
-        print(f"✅ User registered: {username}")
-        return jsonify({'success': True})
-    except psycopg2.IntegrityError:
-        if conn:
-            conn.rollback()
-        return jsonify({'success': False, 'error': 'Username already taken'}), 400
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"❌ Registration error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/reset-password', methods=['POST'])
-def api_reset_password():
-    """Reset a user's password"""
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    new_password = data.get('new_password', '')
-    
-    if not username or not new_password:
-        return jsonify({'success': False, 'error': 'Username and new password required'}), 400
-    
-    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
-        return jsonify({'success': False, 'error': 'Invalid username format'}), 400
-    
-    if len(new_password) < 6:
-        return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
-    
-    hashed_password = generate_password_hash(new_password)
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET password_hash = %s WHERE username = %s", (hashed_password, username))
-        conn.commit()
-        
-        if cursor.rowcount == 0:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
-        
-        print(f"✅ Password reset for: {username}")
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"❌ Password reset error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/users', methods=['GET'])
-def api_get_users():
-    """Get all users (without passwords)"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT id, username, created_at FROM users ORDER BY id")
-        users = cursor.fetchall()
-        return jsonify(users)
-    except Exception as e:
-        print(f"❌ Error fetching users: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/delete-user', methods=['POST'])
-def api_delete_user():
-    """Delete a user"""
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    
-    if not username:
-        return jsonify({'success': False, 'error': 'Username required'}), 400
-    
-    if username == 'admin':
-        return jsonify({'success': False, 'error': 'Cannot delete default admin user'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE username = %s", (username,))
-        conn.commit()
-        
-        if cursor.rowcount == 0:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
-        
-        print(f"🗑️ Deleted user: {username}")
-        return jsonify({'success': True})
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"❌ Delete user error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 400
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/login-logs', methods=['GET'])
-def api_get_login_logs():
-    """Get login history"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM login_logs ORDER BY login_time DESC LIMIT 200")
-        logs = cursor.fetchall()
-        
-        formatted_logs = []
-        for log in logs:
-            formatted_logs.append({
-                'id': log['id'],
-                'username': log['username'],
-                'loginTimeDisplay': log['login_time'].strftime('%m/%d/%Y, %I:%M:%S %p') if log['login_time'] else '',
-                'ipAddress': log['ip_address'],
-                'status': log['status'],
-                'userAgent': log.get('user_agent', 'Unknown')[:50] if log.get('user_agent') else 'Unknown'
-            })
-        
-        return jsonify(formatted_logs)
-    except Exception as e:
-        print(f"❌ Error fetching login logs: {e}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/debug-login', methods=['POST'])
-def debug_login():
-    """Debug endpoint to test password verification"""
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    password = data.get('password', '')
-    
-    if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
-    
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
-        
-        if not user:
-            return jsonify({
-                'exists': False,
-                'message': f'User "{username}" not found in database'
-            })
-        
-        password_hash = user['password_hash']
-        
-        # Test with check_password_hash
-        try:
-            is_valid = check_password_hash(password_hash, password)
-        except Exception as e:
-            return jsonify({
-                'exists': True,
-                'username': username,
-                'hash_preview': password_hash[:50] + '...' if password_hash else 'None',
-                'hash_type': 'unknown',
-                'password_valid': False,
-                'error': f'Hash check error: {str(e)}'
-            })
-        
-        return jsonify({
-            'exists': True,
-            'username': username,
-            'hash_preview': password_hash[:50] + '...' if password_hash else 'None',
-            'hash_type': 'scrypt' if password_hash and password_hash.startswith('scrypt:') else 'pbkdf2' if password_hash and password_hash.startswith('pbkdf2:sha256:') else 'unknown',
-            'password_valid': is_valid,
-            'message': '✅ Password is valid!' if is_valid else '❌ Password is invalid'
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            return_db_connection(conn)
-
-@app.route('/api/debug-db')
-def debug_db():
-    """Debug endpoint to check database contents"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT COUNT(*) FROM checkins")
-        count = cursor.fetchone()[0]
-        
-        cursor.execute("""
-            SELECT id, submission_date, location
-            FROM checkins
-            ORDER BY submission_date ASC
-        """)
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        records = [{'id': row[0], 'submission_date': str(row[1]), 'location': row[2]} for row in rows]
-        
-        return jsonify({
-            "total_records": count,
-            "records": records
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
-
-# ==================== SCHEDULER INSTANCE ====================
-
+# Start scheduler
 scheduler = NotificationScheduler()
-
 scheduler_thread = threading.Thread(
     target=scheduler.start,
     daemon=True
 )
 scheduler_thread.start()
-print("✅ Scheduler thread started for Gunicorn environment.")
+print("✅ Scheduler thread started")
 
 def cleanup():
     print("🛑 Shutting down scheduler...")
@@ -1022,10 +783,7 @@ def cleanup():
 atexit.register(cleanup)
 
 print("=" * 60)
-print("🌍 Safi-Check System Running!")
+print("🌍 Safi-Check System Running with Azure SQL Database!")
 print("=" * 60)
 print(f"📱 WhatsApp Mode: {'MOCK' if MOCK_MODE else 'LIVE'}")
-print(f"📱 Phone Number ID: {PHONE_NUMBER_ID}")
-print(f"📱 Token (first 20 chars): {WHATSAPP_TOKEN[:20]}...")
-print(f"⏰ Scheduler: Daily at {scheduler.target_hour_utc}:{scheduler.target_minute:02d} UTC")
 print("=" * 60)
