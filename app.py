@@ -86,7 +86,7 @@ def get_engine():
     # Use ODBC Driver 17 for better compatibility
     connection_string = (
         f"mssql+pyodbc://{username}:{password}@{server}/{database}"
-        f"?driver=ODBC+Driver+17+for+SQL+Server"
+        f"?driver=ODBC+Driver+18+for+SQL+Server"
         f"&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30"
     )
     
