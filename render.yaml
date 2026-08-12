@@ -1,24 +1,10 @@
 services:
   - type: web
     name: safi-check
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: |
-      apt-get update
-      apt-get install -y curl gnupg unixodbc-dev g++ gcc python3-dev
-      curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-      curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
-      apt-get update
-      ACCEPT_EULA=Y apt-get install -y msodbcsql17
-      pip install --upgrade pip
-      pip install -r requirements.txt
-    preDeployCommand: |
-      apt-get update
-      ACCEPT_EULA=Y apt-get install -y msodbcsql17
-    startCommand: gunicorn app:app
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
       - key: DB_SERVER
         value: safisanadb.database.windows.net
       - key: DB_NAME
