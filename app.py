@@ -66,7 +66,8 @@ class LoginLog(Base):
     user_agent = Column(Text)
 
 # ==================== MODEL FOR SATISFACTION (org.daily_satisfaction) ====================
-# Note: date and time are computed columns - do NOT insert into them
+# Note: All columns except timestamp, score, how, and where are COMPUTED
+# SQL Server calculates: satisfaction_perc, date, time from timestamp
 class DailySatisfaction(Base):
     __tablename__ = 'daily_satisfaction'
     __table_args__ = {'schema': 'org'}
@@ -76,8 +77,9 @@ class DailySatisfaction(Base):
     score = Column(Integer)
     how = Column(Text)  # Stores: "👍 My day was good - Everything went well today"
     where = Column("where", String(100))  # 'where' is a reserved word in SQL
-    satisfaction_perc = Column(Integer)
-    # date and time are COMPUTED columns - SQL Server calculates them from timestamp
+    # satisfaction_perc is COMPUTED - removed from model
+    # date is COMPUTED from timestamp - removed from model
+    # time is COMPUTED from timestamp - removed from model
 
 # ==================== AUTHENTICATION DECORATOR ====================
 def login_required(f):
@@ -259,8 +261,8 @@ def get_feedback():
         
         feedback = []
         for entry in entries:
-            # Determine rating from satisfaction_perc
-            rating = "good" if entry.satisfaction_perc == 1 else "bad"
+            # Determine rating from how column (emoji)
+            rating = "good" if "👍" in entry.how else "bad"
             
             # Split how into mood and comment if there's a dash
             how_parts = entry.how.split(' - ', 1) if entry.how else ['', '']
@@ -279,7 +281,7 @@ def get_feedback():
                 'day': entry.timestamp.strftime('%A') if entry.timestamp else '',
                 'issues': [],
                 'hasRedFlag': False,
-                'satisfaction_perc': entry.satisfaction_perc
+                'satisfaction_perc': 1 if "👍" in entry.how else 0  # Calculate from emoji
             })
         
         db_session.close()
@@ -346,11 +348,9 @@ def submit():
         
         if positive:
             how_text = "👍 My day was good"
-            satisfaction_perc = 1
             score_value = 8
         else:
             how_text = "👎 My day was not good"
-            satisfaction_perc = 0
             score_value = 3
         
         # Override score if provided
@@ -367,16 +367,17 @@ def submit():
         current_time = datetime.now(timezone.utc)
         
         # Insert into org.daily_satisfaction using satisfaction_writer
-        # Note: date and time are COMPUTED columns - SQL Server calculates them from timestamp
+        # Note: satisfaction_perc, date, and time are COMPUTED columns
+        # SQL Server calculates them automatically from timestamp
         db_session = get_satisfaction_session()
         
         satisfaction = DailySatisfaction(
             timestamp=current_time,
             score=score_value,
             how=how_text,
-            where=location,
-            satisfaction_perc=satisfaction_perc
-            # date and time are NOT included - they are computed by SQL Server
+            where=location
+            # satisfaction_perc is NOT included - SQL Server computes it
+            # date and time are NOT included - SQL Server computes them from timestamp
         )
         
         db_session.add(satisfaction)
