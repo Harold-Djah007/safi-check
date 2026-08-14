@@ -66,6 +66,7 @@ class LoginLog(Base):
     user_agent = Column(Text)
 
 # ==================== MODEL FOR SATISFACTION (org.daily_satisfaction) ====================
+# Note: No comments column - everything goes into 'how'
 class DailySatisfaction(Base):
     __tablename__ = 'daily_satisfaction'
     __table_args__ = {'schema': 'org'}
@@ -73,12 +74,11 @@ class DailySatisfaction(Base):
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime)
     score = Column(Integer)
-    how = Column(Text)
+    how = Column(String(100))  # Stores: "👍 My day was good - Everything went well today"
     where = Column("where", String(100))  # 'where' is a reserved word in SQL
     date = Column(Date)
     time = Column(Time)
     satisfaction_perc = Column(Integer)
-    comments = Column(Text, nullable=True)  # Optional comments column
 
 # ==================== AUTHENTICATION DECORATOR ====================
 def login_required(f):
@@ -263,13 +263,18 @@ def get_feedback():
             # Determine rating from satisfaction_perc
             rating = "good" if entry.satisfaction_perc == 1 else "bad"
             
+            # Split how into mood and comment if there's a dash
+            how_parts = entry.how.split(' - ', 1) if entry.how else ['', '']
+            mood_text = how_parts[0] if how_parts else ''
+            comment_text = how_parts[1] if len(how_parts) > 1 else ''
+            
             feedback.append({
                 'id': entry.id,
                 'location': entry.where or 'Unknown',
                 'rating': rating,
-                'mood': entry.how,  # "👍 My day was good" or "👎 My day was not good"
+                'mood': mood_text,  # "👍 My day was good" or "👎 My day was not good"
                 'moodScore': entry.score or 0,
-                'comment': entry.comments or '',  # Returns actual comments from the form
+                'comment': comment_text,  # The user's comment (after the dash)
                 'timestamp': entry.timestamp.isoformat() if entry.timestamp else '',
                 'timestampDisplay': entry.timestamp.strftime('%m/%d/%Y, %I:%M:%S %p') if entry.timestamp else '',
                 'day': entry.timestamp.strftime('%A') if entry.timestamp else '',
@@ -356,6 +361,10 @@ def submit():
             except:
                 pass
         
+        # Append comment to how_text if provided
+        if comments:
+            how_text = f"{how_text} - {comments}"
+        
         current_time = datetime.now(timezone.utc)
         current_date = current_time.date()
         current_time_only = current_time.time()
@@ -370,15 +379,14 @@ def submit():
             where=location,
             date=current_date,
             time=current_time_only,
-            satisfaction_perc=satisfaction_perc,
-            comments=comments if comments else None
+            satisfaction_perc=satisfaction_perc
         )
         
         db_session.add(satisfaction)
         db_session.commit()
         db_session.close()
         
-        logger.info(f"✅ Saved satisfaction: How={how_text}, Location={location}, Score={score_value}, Comments={comments[:50] if comments else 'None'}")
+        logger.info(f"✅ Saved satisfaction: How={how_text}, Location={location}, Score={score_value}")
         return jsonify({'success': True, 'alerts': []})
         
     except Exception as e:
