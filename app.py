@@ -1,8 +1,8 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify, session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, time
 import json
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float, Date, Time
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -20,11 +20,12 @@ logger = logging.getLogger(__name__)
 # ==================== SECURITY CONFIGURATION ====================
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
-# ==================== DATABASE SETUP WITH SQLALCHEMY ====================
+# ==================== DATABASE SETUP ====================
 
 Base = declarative_base()
 
-# Define models
+# ==================== MODELS FOR ADMIN SYSTEM ====================
+
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
@@ -64,6 +65,21 @@ class LoginLog(Base):
     status = Column(String(50))
     user_agent = Column(Text)
 
+# ==================== MODEL FOR SATISFACTION (org.daily_satisfaction) ====================
+class DailySatisfaction(Base):
+    __tablename__ = 'daily_satisfaction'
+    __table_args__ = {'schema': 'org'}
+    
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime)
+    score = Column(Integer)
+    how = Column(Text)
+    where = Column("where", String(100))  # 'where' is a reserved word in SQL
+    date = Column(Date)
+    time = Column(Time)
+    satisfaction_perc = Column(Integer)
+    comments = Column(Text, nullable=True)  # Optional comments column
+
 # ==================== AUTHENTICATION DECORATOR ====================
 def login_required(f):
     @wraps(f)
@@ -83,9 +99,10 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ==================== DATABASE CONNECTION ====================
-def get_engine():
-    """Create database engine for Azure SQL"""
+# ==================== DATABASE CONNECTIONS ====================
+
+def get_admin_engine():
+    """Create engine for admin database (users, checkins, login_logs)"""
     server = os.environ.get('DB_SERVER', 'safisanadb.database.windows.net')
     database = os.environ.get('DB_NAME', 'safidb')
     username = os.environ.get('DB_USERNAME', '')
@@ -102,7 +119,7 @@ def get_engine():
         "&Encrypt=yes&TrustServerCertificate=no"
     )
     
-    logger.info(f"Connecting to Azure SQL: Server={server}, Database={database}")
+    logger.info(f"Connecting to Admin DB: Server={server}, Database={database}")
     
     engine = create_engine(
         connection_string,
@@ -116,19 +133,60 @@ def get_engine():
     )
     return engine
 
-engine = get_engine()
-Session = sessionmaker(bind=engine)
+def get_satisfaction_engine():
+    """Create engine for satisfaction database (org.daily_satisfaction) using satisfaction_writer"""
+    server = os.environ.get('DB_SERVER', 'safisanadb.database.windows.net')
+    database = os.environ.get('DB_NAME', 'safidb')
+    username = os.environ.get('SATISFACTION_USERNAME', '')
+    password = os.environ.get('SATISFACTION_PASSWORD', '')
+    
+    if not username or not password:
+        raise Exception("Satisfaction database credentials not configured")
+    
+    encoded_password = urllib.parse.quote_plus(password)
+    
+    connection_string = (
+        f"mssql+pyodbc://{username}:{encoded_password}@{server}:1433/{database}"
+        "?driver=ODBC+Driver+18+for+SQL+Server"
+        "&Encrypt=yes&TrustServerCertificate=no"
+    )
+    
+    logger.info(f"Connecting to Satisfaction DB: Server={server}, Database={database}")
+    
+    engine = create_engine(
+        connection_string,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        echo=False,
+        connect_args={"timeout": 30}
+    )
+    return engine
 
-def get_db_session():
-    return Session()
+# Create engines and sessions
+admin_engine = get_admin_engine()
+satisfaction_engine = get_satisfaction_engine()
 
-def init_db():
-    """Initialize database tables"""
+AdminSession = sessionmaker(bind=admin_engine)
+SatisfactionSession = sessionmaker(bind=satisfaction_engine)
+
+def get_admin_session():
+    return AdminSession()
+
+def get_satisfaction_session():
+    return SatisfactionSession()
+
+def init_admin_db():
+    """Initialize admin database tables - only if they don't exist"""
     try:
-        Base.metadata.create_all(engine)
-        logger.info("✅ Database tables created/verified")
+        # Create tables only if they don't exist (using checkfirst)
+        Base.metadata.create_all(admin_engine, checkfirst=True)
+        logger.info("✅ Admin database tables created/verified")
         
-        db_session = get_db_session()
+        # Create admin user only if it doesn't exist
+        db_session = get_admin_session()
         try:
             admin = db_session.query(User).filter_by(username='admin').first()
             if not admin:
@@ -149,18 +207,18 @@ def init_db():
         
         return True
     except Exception as e:
-        logger.error(f"❌ Database initialization error: {e}")
+        logger.error(f"❌ Admin database initialization error: {e}")
         import traceback
         traceback.print_exc()
         return False
 
-# Initialize database on startup
+# ==================== INITIALIZE ADMIN DATABASE ON STARTUP ====================
 try:
-    db_initialized = init_db()
+    db_initialized = init_admin_db()
     if db_initialized:
-        logger.info("✅ Database initialized successfully on startup")
+        logger.info("✅ Admin database initialized successfully on startup")
     else:
-        logger.warning("⚠️ Database initialization failed on startup")
+        logger.warning("⚠️ Admin database initialization failed on startup")
 except Exception as e:
     logger.error(f"❌ Startup database initialization error: {e}")
 
@@ -176,64 +234,65 @@ def admin_dashboard():
 
 @app.route('/health')
 def health():
+    """Health check endpoint"""
     try:
-        db_session = get_db_session()
+        db_session = get_admin_session()
         db_session.query(User).first()
         db_session.close()
         return jsonify({'status': 'healthy', 'database': 'connected'})
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
+# ==================== PROTECTED ADMIN API ENDPOINTS ====================
+
 @app.route('/api/feedback', methods=['GET'])
 @login_required
 def get_feedback():
+    """API endpoint for admin dashboard - returns satisfaction data from org.daily_satisfaction"""
     db_session = None
     try:
-        db_session = get_db_session()
-        checkins = db_session.query(Checkin).order_by(Checkin.submission_date.desc()).all()
+        db_session = get_satisfaction_session()
+        
+        # Get all satisfaction entries
+        entries = db_session.query(DailySatisfaction).order_by(
+            DailySatisfaction.timestamp.desc()
+        ).all()
         
         feedback = []
-        for checkin in checkins:
-            issue_texts = [issue.issue for issue in checkin.issues]
-            
-            mood = checkin.mood or ''
-            if 'Thumbs Up' in mood or '👍' in mood:
-                rating = 'good'
-                mood_score = 8
-            else:
-                rating = 'bad'
-                mood_score = 3
-            
-            dt_obj = checkin.submission_date
-            display_timestamp = dt_obj.strftime('%m/%d/%Y, %I:%M:%S %p') if dt_obj else ''
-            day = dt_obj.strftime('%A') if dt_obj else ''
+        for entry in entries:
+            # Determine rating from satisfaction_perc
+            rating = "good" if entry.satisfaction_perc == 1 else "bad"
             
             feedback.append({
-                'id': checkin.id,
-                'location': checkin.location or 'Ashaiman',
+                'id': entry.id,
+                'location': entry.where or 'Unknown',
                 'rating': rating,
-                'moodScore': mood_score,
-                'comment': checkin.comments or '',
-                'ip': checkin.ip_address or '127.0.0.1',
-                'redFlags': [],
-                'timestamp': dt_obj.isoformat() if dt_obj else '',
-                'timestampDisplay': display_timestamp,
-                'day': day,
-                'issues': issue_texts,
-                'hasRedFlag': False
+                'mood': entry.how,  # "👍 My day was good" or "👎 My day was not good"
+                'moodScore': entry.score or 0,
+                'comment': entry.comments or '',  # Returns actual comments from the form
+                'timestamp': entry.timestamp.isoformat() if entry.timestamp else '',
+                'timestampDisplay': entry.timestamp.strftime('%m/%d/%Y, %I:%M:%S %p') if entry.timestamp else '',
+                'day': entry.timestamp.strftime('%A') if entry.timestamp else '',
+                'issues': [],
+                'hasRedFlag': False,
+                'satisfaction_perc': entry.satisfaction_perc
             })
         
         db_session.close()
+        logger.info(f"📊 Returning {len(feedback)} satisfaction entries")
         return jsonify(feedback)
     except Exception as e:
         if db_session:
             db_session.close()
         logger.error(f"❌ Error in get_feedback: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/feedback', methods=['DELETE'])
 @admin_required
 def delete_feedback():
+    """Delete feedback - admin only"""
     data = request.get_json()
     feedback_id = data.get('id')
     
@@ -242,10 +301,10 @@ def delete_feedback():
     
     db_session = None
     try:
-        db_session = get_db_session()
-        checkin = db_session.query(Checkin).filter_by(id=feedback_id).first()
-        if checkin:
-            db_session.delete(checkin)
+        db_session = get_satisfaction_session()
+        entry = db_session.query(DailySatisfaction).filter_by(id=feedback_id).first()
+        if entry:
+            db_session.delete(entry)
             db_session.commit()
             db_session.close()
             return jsonify({'success': True})
@@ -258,54 +317,80 @@ def delete_feedback():
             db_session.close()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ==================== SUBMIT ENDPOINT - WRITES TO org.daily_satisfaction ====================
+
 @app.route('/submit', methods=['POST'])
 def submit():
+    """Submit satisfaction response - writes to org.daily_satisfaction"""
     db_session = None
     try:
-        mood = request.form.get('mood')
+        # Get form data
+        mood = request.form.get('mood')  # 👍 or 👎 (emoji)
         location = request.form.get('location')
+        score = request.form.get('score')  # 1-10
+        comments = request.form.get('comments', '').strip()
         
+        # Validate required fields
         if not location:
             return jsonify({'success': False, 'error': 'Please select your location'}), 400
-        
-        issues_list = request.form.getlist('issues')
-        comments = request.form.get('comments', '').strip()
         
         if not mood:
             return jsonify({'success': False, 'error': 'Please select your mood'}), 400
         
-        ip_address = request.remote_addr
+        # Determine satisfaction based on mood
+        positive = ('👍' in mood) or (mood.lower() == 'good') or ('thumbs up' in mood.lower())
+        
+        if positive:
+            how_text = "👍 My day was good"
+            satisfaction_perc = 1
+            score_value = 8
+        else:
+            how_text = "👎 My day was not good"
+            satisfaction_perc = 0
+            score_value = 3
+        
+        # Override score if provided
+        if score:
+            try:
+                score_value = int(score)
+            except:
+                pass
+        
         current_time = datetime.now(timezone.utc)
+        current_date = current_time.date()
+        current_time_only = current_time.time()
         
-        db_session = get_db_session()
+        # Insert into org.daily_satisfaction using satisfaction_writer
+        db_session = get_satisfaction_session()
         
-        checkin = Checkin(
-            mood=mood,
-            comments=comments,
-            submission_date=current_time,
-            ip_address=ip_address,
-            location=location
+        satisfaction = DailySatisfaction(
+            timestamp=current_time,
+            score=score_value,
+            how=how_text,
+            where=location,
+            date=current_date,
+            time=current_time_only,
+            satisfaction_perc=satisfaction_perc,
+            comments=comments if comments else None
         )
-        db_session.add(checkin)
-        db_session.flush()
         
-        for issue in issues_list:
-            checkin_issue = CheckinIssue(
-                checkin_id=checkin.id,
-                issue=issue
-            )
-            db_session.add(checkin_issue)
-        
+        db_session.add(satisfaction)
         db_session.commit()
         db_session.close()
         
+        logger.info(f"✅ Saved satisfaction: How={how_text}, Location={location}, Score={score_value}, Comments={comments[:50] if comments else 'None'}")
         return jsonify({'success': True, 'alerts': []})
         
     except Exception as e:
         if db_session:
             db_session.rollback()
             db_session.close()
+        logger.error(f"❌ Error in submit: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ==================== USER AUTHENTICATION ====================
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
@@ -323,7 +408,7 @@ def api_login():
     
     db_session = None
     try:
-        db_session = get_db_session()
+        db_session = get_admin_session()
         user = db_session.query(User).filter_by(username=username).first()
         
         if user:
@@ -390,7 +475,7 @@ def api_register():
     
     db_session = None
     try:
-        db_session = get_db_session()
+        db_session = get_admin_session()
         
         existing = db_session.query(User).filter_by(username=username).first()
         if existing:
@@ -434,7 +519,7 @@ def api_reset_password():
     
     db_session = None
     try:
-        db_session = get_db_session()
+        db_session = get_admin_session()
         user = db_session.query(User).filter_by(username=username).first()
         if not user:
             db_session.close()
@@ -466,7 +551,7 @@ def api_reset_password():
 def api_get_users():
     db_session = None
     try:
-        db_session = get_db_session()
+        db_session = get_admin_session()
         users = db_session.query(User).order_by(User.id).all()
         
         result = []
@@ -499,7 +584,7 @@ def api_delete_user():
     
     db_session = None
     try:
-        db_session = get_db_session()
+        db_session = get_admin_session()
         user = db_session.query(User).filter_by(username=username).first()
         if not user:
             db_session.close()
@@ -522,7 +607,7 @@ def api_delete_user():
 def api_get_login_logs():
     db_session = None
     try:
-        db_session = get_db_session()
+        db_session = get_admin_session()
         logs = db_session.query(LoginLog).order_by(LoginLog.login_time.desc()).limit(200).all()
         
         result = []
@@ -543,6 +628,8 @@ def api_get_login_logs():
         if db_session:
             db_session.close()
         return jsonify({'error': str(e)}), 500
+
+# ==================== STARTUP ====================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
