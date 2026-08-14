@@ -1,8 +1,8 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify, session
-from datetime import datetime, timezone, date, time
+from datetime import datetime, timezone
 import json
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float, Date, Time
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -66,7 +66,7 @@ class LoginLog(Base):
     user_agent = Column(Text)
 
 # ==================== MODEL FOR SATISFACTION (org.daily_satisfaction) ====================
-# Note: No comments column - everything goes into 'how'
+# Note: date and time are computed columns - do NOT insert into them
 class DailySatisfaction(Base):
     __tablename__ = 'daily_satisfaction'
     __table_args__ = {'schema': 'org'}
@@ -74,11 +74,10 @@ class DailySatisfaction(Base):
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime)
     score = Column(Integer)
-    how = Column(String(100))  # Stores: "👍 My day was good - Everything went well today"
+    how = Column(Text)  # Stores: "👍 My day was good - Everything went well today"
     where = Column("where", String(100))  # 'where' is a reserved word in SQL
-    date = Column(Date)
-    time = Column(Time)
     satisfaction_perc = Column(Integer)
+    # date and time are COMPUTED columns - SQL Server calculates them from timestamp
 
 # ==================== AUTHENTICATION DECORATOR ====================
 def login_required(f):
@@ -366,10 +365,9 @@ def submit():
             how_text = f"{how_text} - {comments}"
         
         current_time = datetime.now(timezone.utc)
-        current_date = current_time.date()
-        current_time_only = current_time.time()
         
         # Insert into org.daily_satisfaction using satisfaction_writer
+        # Note: date and time are COMPUTED columns - SQL Server calculates them from timestamp
         db_session = get_satisfaction_session()
         
         satisfaction = DailySatisfaction(
@@ -377,9 +375,8 @@ def submit():
             score=score_value,
             how=how_text,
             where=location,
-            date=current_date,
-            time=current_time_only,
             satisfaction_perc=satisfaction_perc
+            # date and time are NOT included - they are computed by SQL Server
         )
         
         db_session.add(satisfaction)
