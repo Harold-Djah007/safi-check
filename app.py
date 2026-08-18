@@ -66,8 +66,8 @@ class LoginLog(Base):
     user_agent = Column(Text)
 
 # ==================== MODEL FOR SATISFACTION (org.daily_satisfaction) ====================
-# Note: All columns except timestamp, score, how, and where are COMPUTED
-# SQL Server calculates: satisfaction_perc, date, time from timestamp
+# Note: satisfaction_perc, date, and time are COMPUTED columns in SQL Server
+# We keep satisfaction_perc in the model for READING, but we never INSERT into it
 class DailySatisfaction(Base):
     __tablename__ = 'daily_satisfaction'
     __table_args__ = {'schema': 'org'}
@@ -77,9 +77,7 @@ class DailySatisfaction(Base):
     score = Column(Integer)
     how = Column(Text)  # Stores: "👍 My day was good - Everything went well today"
     where = Column("where", String(100))  # 'where' is a reserved word in SQL
-    # satisfaction_perc is COMPUTED - removed from model
-    # date is COMPUTED from timestamp - removed from model
-    # time is COMPUTED from timestamp - removed from model
+    satisfaction_perc = Column(Integer)  # For READING only - SQL Server computes this
 
 # ==================== AUTHENTICATION DECORATOR ====================
 def login_required(f):
@@ -281,7 +279,7 @@ def get_feedback():
                 'day': entry.timestamp.strftime('%A') if entry.timestamp else '',
                 'issues': [],
                 'hasRedFlag': False,
-                'satisfaction_perc': 1 if "👍" in entry.how else 0  # Calculate from emoji
+                'satisfaction_perc': entry.satisfaction_perc  # Read from SQL Server computed column
             })
         
         db_session.close()
@@ -368,7 +366,7 @@ def submit():
         
         # Insert into org.daily_satisfaction using satisfaction_writer
         # Note: satisfaction_perc, date, and time are COMPUTED columns
-        # SQL Server calculates them automatically from timestamp
+        # SQL Server calculates them automatically
         db_session = get_satisfaction_session()
         
         satisfaction = DailySatisfaction(
