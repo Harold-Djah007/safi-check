@@ -1,7 +1,7 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, time
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Date, Time
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 # ==================== MODEL FOR SATISFACTION (org.daily_satisfaction) ====================
-# Note: satisfaction_perc, date, and time are COMPUTED columns in SQL Server
 class DailySatisfaction(Base):
     __tablename__ = 'daily_satisfaction'
     __table_args__ = {'schema': 'org'}
@@ -26,9 +25,12 @@ class DailySatisfaction(Base):
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime)
     score = Column(Integer)
-    how = Column(Text)  # Stores: "👍 My day was good - Everything went well today"
+    how = Column(String(100))  # Stores: "good" or "bad" (normalized)
     where = Column("where", String(100))  # 'where' is a reserved word in SQL
-    satisfaction_perc = Column(Integer)  # For READING only - SQL Server computes this
+    date = Column(Date)
+    time = Column(Time)
+    satisfaction_perc = Column(Integer)
+    feedback = Column(Text, nullable=True)  # User's written comment
 
 # ==================== DATABASE CONNECTION ====================
 
@@ -96,10 +98,10 @@ def submit():
     db_session = None
     try:
         # Get form data
-        mood = request.form.get('mood')  # 👍 or 👎 (emoji)
+        mood = request.form.get('mood')  # 👍 or 👎 (emoji from UI)
         location = request.form.get('location')
         score = request.form.get('score')  # 1-10
-        comments = request.form.get('comments', '').strip()
+        feedback_text = request.form.get('comments', '').strip()  # User's written comment
         
         # Validate required fields
         if not location:
@@ -108,14 +110,16 @@ def submit():
         if not mood:
             return jsonify({'success': False, 'error': 'Please select your mood'}), 400
         
-        # Determine satisfaction based on mood
+        # Normalize the mood: 👍 → "good", 👎 → "bad"
         positive = ('👍' in mood) or (mood.lower() == 'good') or ('thumbs up' in mood.lower())
         
         if positive:
-            how_text = "👍 My day was good"
+            how_text = "good"
+            satisfaction_perc = 1
             score_value = 8
         else:
-            how_text = "👎 My day was not good"
+            how_text = "bad"
+            satisfaction_perc = 0
             score_value = 3
         
         # Override score if provided
@@ -125,31 +129,29 @@ def submit():
             except:
                 pass
         
-        # Append comment to how_text if provided
-        if comments:
-            how_text = f"{how_text} - {comments}"
-        
         current_time = datetime.now(timezone.utc)
+        current_date = current_time.date()
+        current_time_only = current_time.time()
         
         # Insert into org.daily_satisfaction using satisfaction_writer
-        # Note: satisfaction_perc, date, and time are COMPUTED columns
-        # SQL Server calculates them automatically
         db_session = get_satisfaction_session()
         
         satisfaction = DailySatisfaction(
             timestamp=current_time,
             score=score_value,
-            how=how_text,
-            where=location
-            # satisfaction_perc is NOT included - SQL Server computes it
-            # date and time are NOT included - SQL Server computes them from timestamp
+            how=how_text,  # "good" or "bad" (normalized)
+            where=location,
+            date=current_date,
+            time=current_time_only,
+            satisfaction_perc=satisfaction_perc,
+            feedback=feedback_text if feedback_text else None  # User's written comment
         )
         
         db_session.add(satisfaction)
         db_session.commit()
         db_session.close()
         
-        logger.info(f"✅ Saved satisfaction: How={how_text}, Location={location}, Score={score_value}")
+        logger.info(f"✅ Saved satisfaction: How={how_text}, Location={location}, Score={score_value}, Feedback={feedback_text[:50] if feedback_text else 'None'}")
         return jsonify({'success': True, 'alerts': []})
         
     except Exception as e:
