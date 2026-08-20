@@ -1,7 +1,7 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify
-from datetime import datetime, timezone, date, time
+from datetime import datetime, timezone
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Date, Time
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Date, Time, Computed
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
@@ -23,13 +23,16 @@ class DailySatisfaction(Base):
     __table_args__ = {'schema': 'org'}
     
     id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime)
+    timestamp = Column(DateTime, nullable=False)
     score = Column(Integer)
     how = Column(String(100))  # Stores: "good" or "bad" (normalized)
     where = Column("where", String(100))  # 'where' is a reserved word in SQL
-    date = Column(Date)
-    time = Column(Time)
-    satisfaction_perc = Column(Integer)
+    
+    # COMPUTED columns - SQL Server calculates these from timestamp
+    date = Column(Date, Computed("CONVERT(date, [timestamp])"))
+    time = Column(Time, Computed("CONVERT(time, [timestamp])"))
+    satisfaction_perc = Column(Integer, Computed("CASE WHEN how = 'good' THEN 1 ELSE 0 END"))
+    
     feedback = Column(Text, nullable=True)  # User's written comment
 
 # ==================== DATABASE CONNECTION ====================
@@ -115,11 +118,9 @@ def submit():
         
         if positive:
             how_text = "good"
-            satisfaction_perc = 1
             score_value = 8
         else:
             how_text = "bad"
-            satisfaction_perc = 0
             score_value = 3
         
         # Override score if provided
@@ -130,10 +131,10 @@ def submit():
                 pass
         
         current_time = datetime.now(timezone.utc)
-        current_date = current_time.date()
-        current_time_only = current_time.time()
         
         # Insert into org.daily_satisfaction using satisfaction_writer
+        # Note: date, time, and satisfaction_perc are COMPUTED columns
+        # SQL Server calculates them automatically - DO NOT INSERT INTO THEM
         db_session = get_satisfaction_session()
         
         satisfaction = DailySatisfaction(
@@ -141,10 +142,10 @@ def submit():
             score=score_value,
             how=how_text,  # "good" or "bad" (normalized)
             where=location,
-            date=current_date,
-            time=current_time_only,
-            satisfaction_perc=satisfaction_perc,
             feedback=feedback_text if feedback_text else None  # User's written comment
+            # date is COMPUTED - do not include
+            # time is COMPUTED - do not include
+            # satisfaction_perc is COMPUTED - do not include
         )
         
         db_session.add(satisfaction)
