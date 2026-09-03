@@ -1,11 +1,13 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify
 from datetime import datetime, timezone
+import json
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Date, Time, Computed
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
 import urllib.parse
+import urllib.request
 
 app = Flask(__name__)
 
@@ -69,12 +71,122 @@ def get_satisfaction_engine():
     )
     return engine
 
-# Create engine and session
-satisfaction_engine = get_satisfaction_engine()
-SatisfactionSession = sessionmaker(bind=satisfaction_engine)
+# Lazy engine so location helpers can run without DB credentials (e.g. local tests)
+_satisfaction_engine = None
+SatisfactionSession = None
 
 def get_satisfaction_session():
+    global _satisfaction_engine, SatisfactionSession
+    if SatisfactionSession is None:
+        _satisfaction_engine = get_satisfaction_engine()
+        SatisfactionSession = sessionmaker(bind=_satisfaction_engine)
     return SatisfactionSession()
+
+
+# ==================== LOCATION NORMALIZATION ====================
+# Check-ins are stored under the three site names only:
+#   Accra metro (and nearby Greater Accra) → Ashaiman
+#   Kumasi metro → Kumasi
+#   Weesp / Amsterdam-area NL → Weesp
+
+DEFAULT_LOCATION = "Ashaiman"
+
+# (min_lat, max_lat, min_lon, max_lon)
+_REGION_BOXES = (
+    ("Kumasi", (6.50, 6.95, -1.85, -1.35)),
+    ("Weesp", (52.20, 52.50, 4.70, 5.30)),
+    ("Ashaiman", (5.28, 5.92, -0.55, 0.22)),  # Greater Accra incl. Accra, Tema, Ashaiman
+)
+
+_ACCRA_ALIASES = (
+    "accra", "greater accra", "tema", "ashaiman", "ashiaman", "madina",
+    "teshie", "nungua", "spintex", "legon", "adenta", "kasoa", "weija",
+    "dansoman", "labadi", "osu", "cantonments", "achimota", "dome",
+    "haatso", "kwabenya", "sakumono", "prampram", "ablekuma", "kaneshie",
+    "circle", "airport residential", "east legon", "lakeside",
+)
+
+_KUMASI_ALIASES = (
+    "kumasi", "ashanti", "kwadaso", "ejisu", "knust", "bantama",
+    "asuoyeboah", "asuofua", "suame", "tafo", "ayeduase", "kentinkrono",
+)
+
+_WEESP_ALIASES = (
+    "weesp", "amsterdam", "netherlands", "nederland", "holland",
+    "noord-holland", "north holland", "diemen", "muiden", "naarden",
+    "bussum", "almere", "hilversum", "amstelveen",
+)
+
+
+def location_from_coords(lat, lon):
+    """Map GPS coordinates to a store location, or None if outside known areas."""
+    try:
+        lat = float(lat)
+        lon = float(lon)
+    except (TypeError, ValueError):
+        return None
+
+    for name, (min_lat, max_lat, min_lon, max_lon) in _REGION_BOXES:
+        if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+            return name
+    return None
+
+
+def normalize_location(*parts):
+    """Map free-text place names / countries onto Ashaiman, Kumasi, or Weesp."""
+    blob = " ".join(str(p) for p in parts if p).strip().lower()
+    if not blob:
+        return DEFAULT_LOCATION
+
+    if any(alias in blob for alias in _KUMASI_ALIASES):
+        return "Kumasi"
+    if any(alias in blob for alias in _WEESP_ALIASES):
+        return "Weesp"
+    if any(alias in blob for alias in _ACCRA_ALIASES):
+        return "Ashaiman"
+    if "ghana" in blob:
+        return DEFAULT_LOCATION
+    return DEFAULT_LOCATION
+
+
+def _nominatim_reverse(lat, lon):
+    url = (
+        "https://nominatim.openstreetmap.org/reverse"
+        f"?lat={lat}&lon={lon}&format=json&zoom=10&addressdetails=1"
+    )
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Safi-Check/1.0 (check-in location resolver)"},
+    )
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def resolve_store_location(lat=None, lon=None, hint=None):
+    """Resolve coords and/or a text hint to a canonical store location."""
+    by_coords = location_from_coords(lat, lon)
+    if by_coords:
+        return by_coords
+
+    if lat is not None and lon is not None:
+        try:
+            data = _nominatim_reverse(lat, lon)
+            addr = data.get("address") or {}
+            return normalize_location(
+                addr.get("city"),
+                addr.get("town"),
+                addr.get("village"),
+                addr.get("suburb"),
+                addr.get("municipality"),
+                addr.get("county"),
+                addr.get("state"),
+                addr.get("country"),
+                data.get("display_name"),
+            )
+        except Exception as e:
+            logger.warning(f"Nominatim reverse geocode failed: {e}")
+
+    return normalize_location(hint)
 
 # ==================== ROUTES ====================
 
@@ -93,7 +205,16 @@ def health():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# ==================== SUBMIT ENDPOINT - WRITES TO org.daily_satisfaction ====================
+
+@app.route('/resolve-location', methods=['POST'])
+def resolve_location():
+    """Resolve browser GPS (or a text hint) to Ashaiman, Kumasi, or Weesp."""
+    payload = request.get_json(silent=True) or {}
+    lat = payload.get('latitude', payload.get('lat'))
+    lon = payload.get('longitude', payload.get('lon'))
+    hint = payload.get('hint') or payload.get('location')
+    location = resolve_store_location(lat, lon, hint)
+    return jsonify({'success': True, 'location': location})
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -103,12 +224,12 @@ def submit():
         # Get form data
         mood = request.form.get('mood')  # 👍 or 👎 (emoji from UI)
         location = request.form.get('location')
+        lat = request.form.get('latitude') or request.form.get('lat')
+        lon = request.form.get('longitude') or request.form.get('lon')
         score = request.form.get('score')  # 1-10
         feedback_text = request.form.get('comments', '').strip()  # User's written comment
-        
-        # Validate required fields
-        if not location:
-            return jsonify({'success': False, 'error': 'Please select your location'}), 400
+
+        location = resolve_store_location(lat, lon, location)
         
         if not mood:
             return jsonify({'success': False, 'error': 'Please select your mood'}), 400

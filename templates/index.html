@@ -252,6 +252,8 @@ textarea:focus { outline: none; border-color: #667eea; }
     
     <input type="hidden" name="mood" id="moodInput">
     <input type="hidden" name="location" id="locationInput">
+    <input type="hidden" name="latitude" id="latitudeInput">
+    <input type="hidden" name="longitude" id="longitudeInput">
 
     <!-- Comments section - Always visible, optional -->
     <div class="form-group">
@@ -307,65 +309,83 @@ if (particlesContainer) {
 
 let selectedMood = null;
 
-// ================= IMPROVED LOCATION DETECTION WITH CACHE =================
-async function detectLocation() {
+// ================= LOCATION DETECTION =================
+// Browser GPS cannot call Nominatim directly (CORS + blocked User-Agent).
+// Coords are sent to /resolve-location, which maps:
+//   Accra metro → Ashaiman, Kumasi metro → Kumasi, Weesp area → Weesp
+const STORE_LOCATIONS = ["Ashaiman", "Kumasi", "Weesp"];
+
+function canonicalizeLocation(name) {
+    const n = (name || "").toLowerCase();
+    if (STORE_LOCATIONS.includes(name)) return name;
+    if (n.includes("kumasi") || n.includes("ashanti")) return "Kumasi";
+    if (n.includes("weesp") || n.includes("amsterdam") || n.includes("nether") || n.includes("holland")) return "Weesp";
+    return "Ashaiman";
+}
+
+function applyLocation(name, lat, lon) {
     const text = document.getElementById("locationText");
     const input = document.getElementById("locationInput");
+    const latInput = document.getElementById("latitudeInput");
+    const lonInput = document.getElementById("longitudeInput");
+    const location = canonicalizeLocation(name);
 
+    text.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${location}`;
+    input.value = location;
+    if (lat != null && lon != null) {
+        latInput.value = lat;
+        lonInput.value = lon;
+    }
+    localStorage.setItem("safi_location_cache", JSON.stringify({
+        location,
+        lat: lat ?? null,
+        lon: lon ?? null,
+        time: Date.now()
+    }));
+    return location;
+}
+
+async function resolveOnServer(payload) {
+    const res = await fetch("/resolve-location", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.success || !data.location) {
+        throw new Error("resolve-location failed");
+    }
+    return data.location;
+}
+
+async function detectLocation() {
+    const text = document.getElementById("locationText");
     text.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting...';
 
     const CACHE_KEY = "safi_location_cache";
-    const CACHE_TIME = 1000 * 60 * 10; // 10 minutes
-
-    // -----------------------------
-    // 1. CHECK CACHE FIRST
-    // -----------------------------
+    const CACHE_TIME = 1000 * 60 * 10;
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if (cached && (Date.now() - cached.time < CACHE_TIME)) {
-        text.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${cached.location}`;
-        input.value = cached.location;
+    if (cached && (Date.now() - cached.time < CACHE_TIME) && cached.location) {
+        applyLocation(cached.location, cached.lat, cached.lon);
         console.log("📍 Using cached location:", cached.location);
     }
-
-    // -----------------------------
-    // 2. FAST IP LOCATION (fallback baseline)
-    // -----------------------------
-    let ipLocation = "Ashaiman";
 
     try {
         const res = await fetch("https://ipapi.co/json/");
         const data = await res.json();
-
-        const country = (data.country_name || "").toLowerCase();
-        const city = (data.city || "").toLowerCase();
-        const region = (data.region || "").toLowerCase();
-
-        if (country === "ghana") {
-            ipLocation = city.includes("kumasi") || region.includes("ashanti")
-                ? "Kumasi"
-                : "Ashaiman";
-        } else if (country) {
-            ipLocation = country.charAt(0).toUpperCase() + country.slice(1);
+        const hint = [data.city, data.region, data.country_name].filter(Boolean).join(" ");
+        const ipLocation = await resolveOnServer({ hint });
+        if (!cached || (Date.now() - cached.time >= CACHE_TIME)) {
+            applyLocation(ipLocation);
         }
-        
-        console.log("📍 IP location detected:", ipLocation);
+        console.log("📍 IP location mapped to:", ipLocation, "from", hint);
     } catch (e) {
         console.warn("IP location failed", e);
+        if (!document.getElementById("locationInput").value) {
+            applyLocation("Ashaiman");
+        }
     }
 
-    // show immediately (fast UX)
-    text.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${ipLocation}`;
-    input.value = ipLocation;
-
-    // save cache
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-        location: ipLocation,
-        time: Date.now()
-    }));
-
-    // -----------------------------
-    // 3. GPS (run in background, overrides IP)
-    // -----------------------------
     if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
@@ -373,60 +393,14 @@ async function detectLocation() {
             try {
                 const { latitude, longitude } = position.coords;
                 console.log("📍 GPS coordinates obtained:", latitude, longitude);
-
-                const res = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&zoom=10&addressdetails=1`,
-                    {
-                        headers: {
-                            "User-Agent": "Safi-Check-App" // important for Nominatim
-                        }
-                    }
-                );
-
-                const data = await res.json();
-                const addr = data.address || {};
-
-                const gpsCity =
-                    addr.city ||
-                    addr.town ||
-                    addr.village ||
-                    addr.suburb ||
-                    addr.county ||
-                    null;
-
-                if (gpsCity) {
-                    let finalLocation = gpsCity;
-                    console.log("📍 GPS detected city:", finalLocation);
-                    
-                    // Special handling for Ghana locations
-                    const cityLower = finalLocation.toLowerCase();
-                    if (cityLower.includes("kumasi") || cityLower.includes("ashanti")) {
-                        finalLocation = "Kumasi";
-                    } else if (cityLower.includes("accra")) {
-                        finalLocation = "Accra";
-                    } else if (cityLower.includes("tema")) {
-                        finalLocation = "Tema";
-                    } else if (cityLower.includes("ashaiman")) {
-                        finalLocation = "Ashaiman";
-                    }
-
-                    // update UI with better GPS result
-                    text.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${finalLocation}`;
-                    input.value = finalLocation;
-
-                    // update cache
-                    localStorage.setItem(CACHE_KEY, JSON.stringify({
-                        location: finalLocation,
-                        time: Date.now()
-                    }));
-                    
-                    console.log("📍 GPS location updated to:", finalLocation);
-                } else {
-                    console.log("⚠️ No city found in GPS reverse geocoding");
-                }
-
+                const location = await resolveOnServer({
+                    latitude,
+                    longitude
+                });
+                applyLocation(location, latitude, longitude);
+                console.log("📍 GPS location mapped to:", location);
             } catch (err) {
-                console.warn("GPS reverse geocode failed", err);
+                console.warn("GPS resolve failed", err);
             }
         },
         (err) => {
