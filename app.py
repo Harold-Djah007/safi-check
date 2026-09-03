@@ -164,6 +164,9 @@ def _nominatim_reverse(lat, lon):
 
 def resolve_store_location(lat=None, lon=None, hint=None):
     """Resolve coords and/or a text hint to a canonical store location."""
+    lat = None if lat in (None, "") else lat
+    lon = None if lon in (None, "") else lon
+
     by_coords = location_from_coords(lat, lon)
     if by_coords:
         return by_coords
