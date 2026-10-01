@@ -434,7 +434,6 @@ async function geolocationPermission() {
 }
 
 async function captureGps(fromUserGesture) {
-    const permission = await geolocationPermission();
     const options = {
         timeout: fromUserGesture ? 25000 : 15000,
         maximumAge: fromUserGesture ? 0 : 60000,
