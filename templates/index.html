@@ -290,7 +290,7 @@ textarea:focus { outline: none; border-color: #667eea; }
         Waiting for location... <span class="loading"></span>
     </button>
     <button type="button" class="btn-retry" id="retryLocationBtn">
-        <i class="fas fa-location-arrow"></i> Allow location
+        <i class="fas fa-redo"></i> Retry location
     </button>
 </form>
 
@@ -416,109 +416,69 @@ function confirmSite(name, lat, lon) {
 function requestGps(options) {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
-            reject(Object.assign(new Error("Geolocation is not supported"), { code: 0 }));
+            reject(new Error("Geolocation is not supported"));
             return;
         }
         navigator.geolocation.getCurrentPosition(resolve, reject, options);
     });
 }
 
-async function geolocationPermission() {
-    try {
-        if (!navigator.permissions || !navigator.permissions.query) return "unknown";
-        const status = await navigator.permissions.query({ name: "geolocation" });
-        return status.state;
-    } catch (err) {
-        return "unknown";
-    }
-}
-
-async function captureGps(fromUserGesture) {
-    const options = {
-        timeout: fromUserGesture ? 25000 : 15000,
-        maximumAge: fromUserGesture ? 0 : 60000,
-        enableHighAccuracy: !!fromUserGesture
-    };
-
-    try {
-        return await requestGps(options);
-    } catch (err) {
-        if (fromUserGesture && err && err.code === 3) {
-            return await requestGps({
-                timeout: 20000,
-                maximumAge: 0,
-                enableHighAccuracy: false
-            });
-        }
-        throw err;
-    }
-}
-
-async function detectLocation(options = {}) {
-    const skipCache = !!options.skipCache;
-    const fromUserGesture = !!options.fromUserGesture;
-
+async function detectLocation() {
     locationReady = false;
     document.getElementById("locationInput").value = "";
     document.getElementById("latitudeInput").value = "";
     document.getElementById("longitudeInput").value = "";
+    showRetry(false);
     updateSubmitButton();
     setLocationStatus("Detecting your location...", true);
-    if (!fromUserGesture) showRetry(false);
 
-    if (!skipCache) {
-        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-        if (cached && (Date.now() - cached.time < CACHE_TIME)) {
-            const cachedSite = locationFromCoords(cached.lat, cached.lon);
-            if (cachedSite) {
-                confirmSite(cachedSite, cached.lat, cached.lon);
-                console.log("📍 Using cached GPS location:", cachedSite);
-                return;
-            }
-        }
-    } else {
-        localStorage.removeItem(CACHE_KEY);
-    }
-
-    try {
-        const position = await captureGps(fromUserGesture);
-        const { latitude, longitude } = position.coords;
-        console.log("📍 GPS coordinates obtained:", latitude, longitude);
-
-        let site = locationFromCoords(latitude, longitude);
-        if (!site) {
-            try {
-                const resolved = await resolveOnServer({ latitude, longitude });
-                if (STORE_LOCATIONS.includes(resolved)) site = resolved;
-            } catch (err) {
-                console.warn("GPS reverse lookup failed", err);
-            }
-        }
-
-        if (site) {
-            confirmSite(site, latitude, longitude);
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (cached && (Date.now() - cached.time < CACHE_TIME)) {
+        const cachedSite = locationFromCoords(cached.lat, cached.lon);
+        if (cachedSite) {
+            confirmSite(cachedSite, cached.lat, cached.lon);
+            console.log("📍 Using cached GPS location:", cachedSite);
             return;
         }
-
-        setLocationStatus("Could not match this location. Retry.", false);
-        showRetry(true);
-    } catch (err) {
-        console.warn("GPS attempt failed:", err && err.message ? err.message : err);
-        const denied = err && err.code === 1;
-        const permission = await geolocationPermission();
-        if (denied || permission === "denied") {
-            setLocationStatus("Allow location in the address-bar lock, then retry", false);
-        } else {
-            setLocationStatus("Turn on location to continue", false);
-        }
-        showRetry(true);
     }
-}
 
-async function retryLocation() {
-    setLocationStatus("Allow location when asked...", true);
-    showRetry(false);
-    await detectLocation({ skipCache: true, fromUserGesture: true });
+    const attempts = [
+        { timeout: 15000, maximumAge: 60000, enableHighAccuracy: false },
+        { timeout: 20000, maximumAge: 0, enableHighAccuracy: true }
+    ];
+
+    for (let i = 0; i < attempts.length; i++) {
+        try {
+            setLocationStatus(i === 0 ? "Detecting your location..." : "Still locating...", true);
+            const position = await requestGps(attempts[i]);
+            const { latitude, longitude } = position.coords;
+            console.log("📍 GPS coordinates obtained:", latitude, longitude);
+
+            let site = locationFromCoords(latitude, longitude);
+            if (!site) {
+                try {
+                    const resolved = await resolveOnServer({ latitude, longitude });
+                    if (STORE_LOCATIONS.includes(resolved)) site = resolved;
+                } catch (err) {
+                    console.warn("GPS reverse lookup failed", err);
+                }
+            }
+
+            if (site) {
+                confirmSite(site, latitude, longitude);
+                return;
+            }
+
+            setLocationStatus("Could not match this location. Retry.", false);
+            showRetry(true);
+            return;
+        } catch (err) {
+            console.warn("GPS attempt failed:", err && err.message ? err.message : err);
+        }
+    }
+
+    setLocationStatus("Turn on location to continue", false);
+    showRetry(true);
 }
 
 async function resolveOnServer(payload) {
@@ -545,7 +505,7 @@ document.querySelectorAll(".mood-option").forEach(opt => {
 });
 
 // ================= FORM SUBMISSION =================
-document.getElementById("retryLocationBtn").onclick = () => retryLocation();
+document.getElementById("retryLocationBtn").onclick = () => detectLocation();
 
 function resetForm() {
     document.getElementById("checkinForm").reset();
