@@ -35,11 +35,13 @@ body {
     width: 100%;
     height: 100%;
     display: block;
+    z-index: 2;
 }
 .atmosphere::before {
     content: "";
     position: absolute;
     inset: -20%;
+    z-index: 0;
     background:
         radial-gradient(ellipse 50% 42% at 18% 22%, rgba(255,255,255,0.22), transparent 58%),
         radial-gradient(ellipse 46% 38% at 86% 12%, rgba(196,181,253,0.28), transparent 55%),
@@ -51,8 +53,9 @@ body {
     content: "";
     position: absolute;
     inset: 0;
+    z-index: 3;
     background:
-        radial-gradient(ellipse 70% 60% at 50% 48%, transparent 35%, rgba(76, 29, 149, 0.18) 100%);
+        radial-gradient(ellipse 70% 60% at 50% 48%, transparent 42%, rgba(76, 29, 149, 0.12) 100%);
 }
 .orb {
     position: absolute;
@@ -61,6 +64,7 @@ body {
     opacity: 0.55;
     mix-blend-mode: screen;
     will-change: transform;
+    z-index: 1;
 }
 .orb-a {
     width: min(42vw, 420px);
@@ -395,7 +399,7 @@ textarea:focus { outline: none; border-color: #667eea; }
 </div>
 </div>
 
-<script src="/static/atmosphere.js"></script>
+<script src="/static/atmosphere.js?v=2"></script>
 <script>
 let selectedMood = null;
 let locationReady = false;

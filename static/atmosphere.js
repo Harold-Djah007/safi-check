@@ -56,13 +56,15 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
-    function sparklineY(xNorm, t) {
+    function sparklineY(xNorm, t, band) {
         var pulse = 0.5 + 0.5 * Math.sin(t * 1.15);
         var wave =
-            Math.sin(xNorm * Math.PI * 2.4 + t * 0.55) * 0.045 +
-            Math.sin(xNorm * Math.PI * 5.2 - t * 0.9) * 0.018 +
-            pulse * 0.03 * Math.sin(xNorm * Math.PI);
-        return height * (0.62 - wave - xNorm * 0.08);
+            Math.sin(xNorm * Math.PI * 2.4 + t * 0.55) * 0.028 +
+            Math.sin(xNorm * Math.PI * 5.2 - t * 0.9) * 0.012 +
+            pulse * 0.02 * Math.sin(xNorm * Math.PI);
+        var rise = xNorm * 0.035;
+        if (band === "top") return height * (0.08 - wave - rise);
+        return height * (0.92 - wave - rise);
     }
 
     function drawOrbs(t) {
@@ -84,53 +86,61 @@
 
     function drawPulseRings(t) {
         var cx = width * 0.5;
-        var cy = height * 0.48;
-        var beat = (t * 0.22) % 1;
+        var cy = height * 0.5;
+        var beat = (t * 0.18) % 1;
         for (var i = 0; i < 3; i++) {
             var p = (beat + i / 3) % 1;
-            var radius = 40 + p * Math.min(width, height) * 0.55;
+            var radius = Math.min(width, height) * (0.22 + p * 0.48);
             ctx.beginPath();
             ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.strokeStyle = "rgba(255,255,255," + (0.16 * (1 - p)) + ")";
-            ctx.lineWidth = 1.25;
+            ctx.strokeStyle = "rgba(255,255,255," + (0.2 * (1 - p)) + ")";
+            ctx.lineWidth = 1.4;
             ctx.stroke();
         }
     }
 
-    function drawSparkline(t) {
+    function drawOneSparkline(t, band, headOffset) {
         var steps = isMobile.matches ? 48 : 80;
         ctx.beginPath();
         for (var i = 0; i <= steps; i++) {
             var xNorm = i / steps;
             var x = xNorm * width;
-            var y = sparklineY(xNorm, t);
+            var y = sparklineY(xNorm, t, band);
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = "rgba(255,255,255,0.22)";
-        ctx.lineWidth = 1.6;
+        ctx.shadowColor = "rgba(255,255,255,0.55)";
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = "rgba(255,255,255,0.62)";
+        ctx.lineWidth = 2.4;
         ctx.lineJoin = "round";
         ctx.stroke();
+        ctx.shadowBlur = 0;
 
         var glow = ctx.createLinearGradient(0, 0, width, 0);
-        glow.addColorStop(0, "rgba(167,139,250,0)");
-        glow.addColorStop(0.5, "rgba(196,181,253,0.35)");
-        glow.addColorStop(1, "rgba(167,139,250,0)");
+        glow.addColorStop(0, "rgba(224,231,255,0)");
+        glow.addColorStop(0.5, "rgba(255,255,255,0.28)");
+        glow.addColorStop(1, "rgba(224,231,255,0)");
         ctx.strokeStyle = glow;
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 7;
         ctx.stroke();
 
-        var head = (t * 0.08) % 1;
+        var head = (t * 0.09 + headOffset) % 1;
         var hx = head * width;
-        var hy = sparklineY(head, t);
-        var hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, 28);
-        hg.addColorStop(0, "rgba(255,255,255,0.55)");
-        hg.addColorStop(0.4, "rgba(196,181,253,0.28)");
+        var hy = sparklineY(head, t, band);
+        var hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, 32);
+        hg.addColorStop(0, "rgba(255,255,255,0.7)");
+        hg.addColorStop(0.35, "rgba(196,181,253,0.32)");
         hg.addColorStop(1, "rgba(196,181,253,0)");
         ctx.fillStyle = hg;
         ctx.beginPath();
-        ctx.arc(hx, hy, 28, 0, Math.PI * 2);
+        ctx.arc(hx, hy, 32, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    function drawSparkline(t) {
+        drawOneSparkline(t, "top", 0);
+        drawOneSparkline(t, "bottom", 0.45);
     }
 
     function drawSparks(t) {
