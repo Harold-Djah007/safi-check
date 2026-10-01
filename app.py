@@ -132,11 +132,11 @@ def location_from_coords(lat, lon):
     return None
 
 
-def normalize_location(*parts):
-    """Map free-text place names / countries onto Ashaiman, Kumasi, or Weesp."""
+def match_location_from_text(*parts):
+    """Return a store name only when the text clearly matches a site. Never guess."""
     blob = " ".join(str(p) for p in parts if p).strip().lower()
     if not blob:
-        return DEFAULT_LOCATION
+        return None
 
     if any(alias in blob for alias in _KUMASI_ALIASES):
         return "Kumasi"
@@ -144,9 +144,12 @@ def normalize_location(*parts):
         return "Weesp"
     if any(alias in blob for alias in _ACCRA_ALIASES):
         return "Ashaiman"
-    if "ghana" in blob:
-        return DEFAULT_LOCATION
-    return DEFAULT_LOCATION
+    return None
+
+
+def normalize_location(*parts):
+    """Map free-text place names onto Ashaiman, Kumasi, or Weesp."""
+    return match_location_from_text(*parts) or DEFAULT_LOCATION
 
 
 def _nominatim_reverse(lat, lon):
@@ -175,7 +178,7 @@ def resolve_store_location(lat=None, lon=None, hint=None):
         try:
             data = _nominatim_reverse(lat, lon)
             addr = data.get("address") or {}
-            return normalize_location(
+            return match_location_from_text(
                 addr.get("city"),
                 addr.get("town"),
                 addr.get("village"),
@@ -189,7 +192,7 @@ def resolve_store_location(lat=None, lon=None, hint=None):
         except Exception as e:
             logger.warning(f"Nominatim reverse geocode failed: {e}")
 
-    return normalize_location(hint)
+    return match_location_from_text(hint)
 
 # ==================== ROUTES ====================
 

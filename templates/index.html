@@ -343,7 +343,7 @@ const REGION_BOXES = [
     { name: "Weesp", minLat: 52.20, maxLat: 52.50, minLon: 4.70, maxLon: 5.30 },
     { name: "Ashaiman", minLat: 5.28, maxLat: 5.92, minLon: -0.55, maxLon: 0.22 }
 ];
-const CACHE_KEY = "safi_location_cache";
+const CACHE_KEY = "safi_location_cache_v2";
 const CACHE_TIME = 1000 * 60 * 10;
 
 function locationFromCoords(lat, lon) {
@@ -451,18 +451,14 @@ async function detectLocation() {
             let site = locationFromCoords(latitude, longitude);
             if (!site) {
                 try {
-                    site = await resolveOnServer({ latitude, longitude });
+                    const resolved = await resolveOnServer({ latitude, longitude });
+                    if (STORE_LOCATIONS.includes(resolved)) site = resolved;
                 } catch (err) {
                     console.warn("GPS reverse lookup failed", err);
                 }
             }
 
-            const fromBox = locationFromCoords(latitude, longitude);
-            if (fromBox) {
-                confirmSite(fromBox, latitude, longitude);
-                return;
-            }
-            if (STORE_LOCATIONS.includes(site)) {
+            if (site) {
                 confirmSite(site, latitude, longitude);
                 return;
             }
