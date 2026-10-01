@@ -226,13 +226,19 @@ def submit():
     try:
         # Get form data
         mood = request.form.get('mood')  # 👍 or 👎 (emoji from UI)
-        location = request.form.get('location')
         lat = request.form.get('latitude') or request.form.get('lat')
         lon = request.form.get('longitude') or request.form.get('lon')
         score = request.form.get('score')  # 1-10
         feedback_text = request.form.get('comments', '').strip()  # User's written comment
 
-        location = resolve_store_location(lat, lon, location)
+        # Only accept a site that GPS coordinates actually map to.
+        # Never default to Ashaiman when coords are missing or the lookup failed.
+        location = location_from_coords(lat, lon)
+        if not location:
+            return jsonify({
+                'success': False,
+                'error': 'Please wait until your location is detected'
+            }), 400
         
         if not mood:
             return jsonify({'success': False, 'error': 'Please select your mood'}), 400

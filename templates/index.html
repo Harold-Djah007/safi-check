@@ -167,6 +167,25 @@ textarea:focus { outline: none; border-color: #667eea; }
     transform: translateY(-2px);
     box-shadow: 0 10px 25px -5px rgba(102,126,234,0.4);
 }
+.btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+.btn-retry {
+    width: 100%;
+    margin-top: 12px;
+    padding: 12px;
+    background: white;
+    color: #667eea;
+    border: 2px solid #667eea;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: none;
+}
 
 .success-message { text-align: center; padding: 40px 0; }
 .success-icon {
@@ -261,8 +280,11 @@ textarea:focus { outline: none; border-color: #667eea; }
         <textarea name="comments" rows="4" placeholder="Share your thoughts, feedback, or suggestions..."></textarea>
     </div>
 
-    <button type="submit" class="btn-primary" id="submitBtn">
-        Submit Check-in <i class="fas fa-paper-plane"></i>
+    <button type="submit" class="btn-primary" id="submitBtn" disabled>
+        Waiting for location... <span class="loading"></span>
+    </button>
+    <button type="button" class="btn-retry" id="retryLocationBtn">
+        <i class="fas fa-redo"></i> Retry location
     </button>
 </form>
 
@@ -308,41 +330,153 @@ if (particlesContainer) {
 }
 
 let selectedMood = null;
+let locationReady = false;
+let submitting = false;
 
 // ================= LOCATION DETECTION =================
-// Browser GPS cannot call Nominatim directly (CORS + blocked User-Agent).
-// Coords are sent to /resolve-location, which maps:
-//   Accra metro → Ashaiman, Kumasi metro → Kumasi, Weesp area → Weesp
+// Submit stays locked until GPS maps to a site. Coords are mapped on the
+// device (no extra network) so Kumasi is not stored as Ashaiman on a bad
+// connection. Accra metro → Ashaiman, Kumasi → Kumasi, Weesp → Weesp.
 const STORE_LOCATIONS = ["Ashaiman", "Kumasi", "Weesp"];
+const REGION_BOXES = [
+    { name: "Kumasi", minLat: 6.50, maxLat: 6.95, minLon: -1.85, maxLon: -1.35 },
+    { name: "Weesp", minLat: 52.20, maxLat: 52.50, minLon: 4.70, maxLon: 5.30 },
+    { name: "Ashaiman", minLat: 5.28, maxLat: 5.92, minLon: -0.55, maxLon: 0.22 }
+];
+const CACHE_KEY = "safi_location_cache";
+const CACHE_TIME = 1000 * 60 * 10;
 
-function canonicalizeLocation(name) {
-    const n = (name || "").toLowerCase();
-    if (STORE_LOCATIONS.includes(name)) return name;
-    if (n.includes("kumasi") || n.includes("ashanti")) return "Kumasi";
-    if (n.includes("weesp") || n.includes("amsterdam") || n.includes("nether") || n.includes("holland")) return "Weesp";
-    return "Ashaiman";
+function locationFromCoords(lat, lon) {
+    const latitude = Number(lat);
+    const longitude = Number(lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    for (const box of REGION_BOXES) {
+        if (
+            latitude >= box.minLat && latitude <= box.maxLat &&
+            longitude >= box.minLon && longitude <= box.maxLon
+        ) {
+            return box.name;
+        }
+    }
+    return null;
 }
 
-function applyLocation(name, lat, lon) {
+function setLocationStatus(message, spinning) {
     const text = document.getElementById("locationText");
+    const icon = spinning
+        ? '<i class="fas fa-spinner fa-spin"></i>'
+        : '<i class="fas fa-map-marker-alt"></i>';
+    text.innerHTML = `${icon} ${message}`;
+}
+
+function showRetry(show) {
+    document.getElementById("retryLocationBtn").style.display = show ? "block" : "none";
+}
+
+function updateSubmitButton() {
+    const btn = document.getElementById("submitBtn");
+    if (submitting) return;
+    if (!locationReady) {
+        btn.disabled = true;
+        btn.innerHTML = 'Waiting for location... <span class="loading"></span>';
+        return;
+    }
+    btn.disabled = false;
+    btn.innerHTML = 'Submit Check-in <i class="fas fa-paper-plane"></i>';
+}
+
+function confirmSite(name, lat, lon) {
     const input = document.getElementById("locationInput");
     const latInput = document.getElementById("latitudeInput");
     const lonInput = document.getElementById("longitudeInput");
-    const location = canonicalizeLocation(name);
 
-    text.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${location}`;
-    input.value = location;
-    if (lat != null && lon != null) {
-        latInput.value = lat;
-        lonInput.value = lon;
-    }
-    localStorage.setItem("safi_location_cache", JSON.stringify({
-        location,
-        lat: lat ?? null,
-        lon: lon ?? null,
+    input.value = name;
+    latInput.value = lat;
+    lonInput.value = lon;
+    locationReady = true;
+    showRetry(false);
+    setLocationStatus(name, false);
+    updateSubmitButton();
+
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+        location: name,
+        lat,
+        lon,
         time: Date.now()
     }));
-    return location;
+    console.log("📍 Location confirmed:", name, lat, lon);
+}
+
+function requestGps(options) {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error("Geolocation is not supported"));
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+}
+
+async function detectLocation() {
+    locationReady = false;
+    document.getElementById("locationInput").value = "";
+    document.getElementById("latitudeInput").value = "";
+    document.getElementById("longitudeInput").value = "";
+    showRetry(false);
+    updateSubmitButton();
+    setLocationStatus("Detecting your location...", true);
+
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (cached && (Date.now() - cached.time < CACHE_TIME)) {
+        const cachedSite = locationFromCoords(cached.lat, cached.lon);
+        if (cachedSite) {
+            confirmSite(cachedSite, cached.lat, cached.lon);
+            console.log("📍 Using cached GPS location:", cachedSite);
+            return;
+        }
+    }
+
+    const attempts = [
+        { timeout: 15000, maximumAge: 60000, enableHighAccuracy: false },
+        { timeout: 20000, maximumAge: 0, enableHighAccuracy: true }
+    ];
+
+    for (let i = 0; i < attempts.length; i++) {
+        try {
+            setLocationStatus(i === 0 ? "Detecting your location..." : "Still locating...", true);
+            const position = await requestGps(attempts[i]);
+            const { latitude, longitude } = position.coords;
+            console.log("📍 GPS coordinates obtained:", latitude, longitude);
+
+            let site = locationFromCoords(latitude, longitude);
+            if (!site) {
+                try {
+                    site = await resolveOnServer({ latitude, longitude });
+                } catch (err) {
+                    console.warn("GPS reverse lookup failed", err);
+                }
+            }
+
+            const fromBox = locationFromCoords(latitude, longitude);
+            if (fromBox) {
+                confirmSite(fromBox, latitude, longitude);
+                return;
+            }
+            if (STORE_LOCATIONS.includes(site)) {
+                confirmSite(site, latitude, longitude);
+                return;
+            }
+
+            setLocationStatus("Could not match this location. Retry.", false);
+            showRetry(true);
+            return;
+        } catch (err) {
+            console.warn("GPS attempt failed:", err && err.message ? err.message : err);
+        }
+    }
+
+    setLocationStatus("Turn on location to continue", false);
+    showRetry(true);
 }
 
 async function resolveOnServer(payload) {
@@ -358,62 +492,6 @@ async function resolveOnServer(payload) {
     return data.location;
 }
 
-async function detectLocation() {
-    const text = document.getElementById("locationText");
-    text.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting...';
-
-    const CACHE_KEY = "safi_location_cache";
-    const CACHE_TIME = 1000 * 60 * 10;
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if (cached && (Date.now() - cached.time < CACHE_TIME) && cached.location) {
-        applyLocation(cached.location, cached.lat, cached.lon);
-        console.log("📍 Using cached location:", cached.location);
-    }
-
-    try {
-        const res = await fetch("https://ipapi.co/json/");
-        const data = await res.json();
-        const hint = [data.city, data.region, data.country_name].filter(Boolean).join(" ");
-        const ipLocation = await resolveOnServer({ hint });
-        if (!cached || (Date.now() - cached.time >= CACHE_TIME)) {
-            applyLocation(ipLocation);
-        }
-        console.log("📍 IP location mapped to:", ipLocation, "from", hint);
-    } catch (e) {
-        console.warn("IP location failed", e);
-        if (!document.getElementById("locationInput").value) {
-            applyLocation("Ashaiman");
-        }
-    }
-
-    if (!navigator.geolocation) return;
-
-    navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            try {
-                const { latitude, longitude } = position.coords;
-                console.log("📍 GPS coordinates obtained:", latitude, longitude);
-                const location = await resolveOnServer({
-                    latitude,
-                    longitude
-                });
-                applyLocation(location, latitude, longitude);
-                console.log("📍 GPS location mapped to:", location);
-            } catch (err) {
-                console.warn("GPS resolve failed", err);
-            }
-        },
-        (err) => {
-            console.warn("GPS denied or failed:", err.message);
-        },
-        {
-            timeout: 8000,
-            maximumAge: 300000,
-            enableHighAccuracy: false
-        }
-    );
-}
-
 // ================= MOOD SELECTION =================
 document.querySelectorAll(".mood-option").forEach(opt => {
     opt.addEventListener("click", () => {
@@ -425,6 +503,8 @@ document.querySelectorAll(".mood-option").forEach(opt => {
 });
 
 // ================= FORM SUBMISSION =================
+document.getElementById("retryLocationBtn").onclick = () => detectLocation();
+
 function resetForm() {
     document.getElementById("checkinForm").reset();
     document.querySelectorAll(".mood-option").forEach(o => o.classList.remove("selected"));
@@ -439,6 +519,11 @@ function resetForm() {
 
 document.getElementById("checkinForm").onsubmit = async (e) => {
     e.preventDefault();
+
+    if (!locationReady) {
+        alert("Please wait until your location is detected");
+        return;
+    }
     
     if (!selectedMood) {
         alert("Please select how you feel");
@@ -446,10 +531,14 @@ document.getElementById("checkinForm").onsubmit = async (e) => {
     }
     
     const locationValue = document.getElementById("locationInput").value;
+    if (!STORE_LOCATIONS.includes(locationValue)) {
+        alert("Please wait until your location is detected");
+        return;
+    }
     console.log("📤 Submitting with location:", locationValue);
     
     const submitBtn = document.getElementById("submitBtn");
-    const originalText = submitBtn.innerHTML;
+    submitting = true;
     submitBtn.innerHTML = 'Submitting... <span class="loading"></span>';
     submitBtn.disabled = true;
     
@@ -470,8 +559,8 @@ document.getElementById("checkinForm").onsubmit = async (e) => {
         console.error("Submission error:", error);
         alert("Network error. Please try again.");
     } finally {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
+        submitting = false;
+        updateSubmitButton();
     }
 };
 
